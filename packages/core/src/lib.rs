@@ -2,5 +2,5 @@
 
 mod application_info;
 pub use application_info::*;
-mod data;
-mod render;
+pub mod data;
+pub mod render;

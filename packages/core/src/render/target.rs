@@ -8,12 +8,11 @@ use std::{
     rc::Rc, 
 };
 use crate::{
-    data::Color,
     render::{
         ctx::RenderContext,
         err::{
             ContextError,
-            PipelineError
+            RenderError
         },
         pipeline::Pipeline,
         swapchain::Swapchain,
@@ -21,6 +20,7 @@ use crate::{
     }
 };
 
+#[derive(Debug)]
 pub enum RenderTargetError {
     FailedToAquireNextImage,
     WaitForFencesFailed,
@@ -35,8 +35,7 @@ pub enum RenderTargetError {
     EndCommandBufferFailed,
     SubmitToQueueFailed,
     SwapchainNeedsRecreation,
-    GraphicPresentationFailed,
-    PipelineError(PipelineError)
+    GraphicPresentationFailed
 }
 
 #[derive(Clone)]
@@ -67,7 +66,7 @@ pub struct RenderTarget {
 
 impl RenderTarget {
     /// Draw a frame given a list of vertices.
-    pub fn draw<C:Into<Color>>(&mut self, clear_color:C, vertices: &[VertexShape]) -> Result<(), RenderTargetError> {
+    pub fn draw(&mut self, clear_color:[f32; 4], vertices: &[VertexShape]) -> Result<(), RenderError> {
         // Acquire next image
         let timeout = u64::MAX;
         let image_index = unsafe {
@@ -82,7 +81,7 @@ impl RenderTarget {
                     // swapchain out of date, recreate (not implemented in full here)
                     return Ok(());
                 }
-                Err(_) => return Err(RenderTargetError::FailedToAquireNextImage),
+                Err(_) => return Err(RenderTargetError::FailedToAquireNextImage.into()),
             }
         };
 
@@ -110,7 +109,7 @@ impl RenderTarget {
 
             let clear_values = [vk::ClearValue {
                 color: vk::ClearColorValue {
-                    float32: clear_color.into().float32(),
+                    float32: clear_color
                 },
             }];
 
@@ -168,9 +167,9 @@ impl RenderTarget {
         match result {
             Ok(_) => {}
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => return Err(
-                RenderTargetError::SwapchainNeedsRecreation
+                RenderTargetError::SwapchainNeedsRecreation.into()
             ),
-            Err(_) => return Err(RenderTargetError::GraphicPresentationFailed),
+            Err(_) => return Err(RenderTargetError::GraphicPresentationFailed.into()),
         }
 
         // Advance frame
@@ -258,7 +257,7 @@ impl Drop for RenderTarget {
 }
 
 impl RenderContext {
-    pub fn create_target(self: Rc<Self>, window:&Arc<Window>) -> Result<RenderTarget, ContextError> {
+    pub fn create_target(self: &Rc<Self>, window:&Arc<Window>) -> Result<RenderTarget, RenderError> {
         unsafe {
             let display_handle = window.display_handle()
                 .map_err(|e|ContextError::DisplayHandleError(e))?
@@ -341,8 +340,7 @@ impl RenderContext {
             let shader_compiler = shaderc::Compiler::new()
                 .map_err(|_|ContextError::InitShaderCompilerFailed)?;
 
-            let pipelines = Pipeline::new_group(&device, render_pass, swapchain.extent, &shader_compiler)
-                .map_err(|e|ContextError::PipelineError(e))?;
+            let pipelines = Pipeline::new_group(&device, render_pass, swapchain.extent, &shader_compiler)?;
 
             let vk::Extent2D{width, height} = swapchain.extent;
 
@@ -406,7 +404,7 @@ impl RenderContext {
     }
 }
 
-unsafe fn create_sync_objects(device: &ash::Device, max_frames_in_flight: usize) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>), ContextError> {
+unsafe fn create_sync_objects(device: &ash::Device, max_frames_in_flight: usize) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>), RenderError> {
     let mut image_available_semaphores = Vec::with_capacity(max_frames_in_flight);
     let mut render_finished_semaphores = Vec::with_capacity(max_frames_in_flight);
     let mut in_flight_fences = Vec::with_capacity(max_frames_in_flight);

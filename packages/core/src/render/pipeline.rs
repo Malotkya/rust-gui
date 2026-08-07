@@ -1,6 +1,6 @@
 use ash::vk;
 use super::{
-    err::ShaderError,
+    err::RenderError,
     shader::Shader,
     VertexShape
 };
@@ -14,7 +14,6 @@ pub enum PipelineError {
     InitPiplineLayoutFailed,
     InitPipelineFailed(PipelineType),
     InitShaderCompilerFailed,
-    ShaderError(ShaderError)
 }
 
 pub type PipelineType = vk::PrimitiveTopology;
@@ -28,9 +27,8 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new_group(device: &Rc<ash::Device>, render_pass: vk::RenderPass, extent: vk::Extent2D, compiler: &shaderc::Compiler) -> Result<Vec<Self>, PipelineError> {
-        let shader = Shader::new(device, compiler)
-            .map_err(|e|PipelineError::ShaderError(e))?;
+    pub fn new_group(device: &Rc<ash::Device>, render_pass: vk::RenderPass, extent: vk::Extent2D, compiler: &shaderc::Compiler) -> Result<Vec<Self>, RenderError> {
+        let shader = Shader::new(device, compiler)?;
 
         let shader_stages = shader.stages();
         let vertex_bindings = VertexShape::binding();

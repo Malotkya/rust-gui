@@ -2,7 +2,7 @@ use ash::vk;
 use crate::{
     data::{Color, Position},
     render::{
-        err::RenderTargetError,
+        err::{RenderTargetError, RenderError},
         ctx::DeviceContext
     }
 };
@@ -48,7 +48,7 @@ impl GpuData {
         }
     }
 
-    pub fn update<'a, T: Sized>(&'a mut self, data:&[T]) -> Result<UnmapRef<'a>, RenderTargetError> {
+    pub fn update<'a, T: Sized>(&'a mut self, data:&[T]) -> Result<UnmapRef<'a>, RenderError> {
         let needed_size = std::mem::size_of_val(data) as u64;
 
         if needed_size > self.size {
@@ -71,7 +71,7 @@ impl GpuData {
         })
     }
 
-    pub fn resize(&mut self, size:vk::DeviceSize) -> Result<(), RenderTargetError>{
+    pub fn resize(&mut self, size:vk::DeviceSize) -> Result<(), RenderError>{
          if size <= self.size {
             return Ok(());
         }
@@ -146,7 +146,7 @@ impl GpuBatchData {
         self.positions.empty() && self.colors.empty()
     }
 
-    pub fn update(&mut self, shapes: &[VertexShape]) -> Result<(), RenderTargetError>{
+    pub fn update(&mut self, shapes: &[VertexShape]) -> Result<(), RenderError>{
         let size = shapes.len();
         let mut positions = Vec::with_capacity(size);
         let mut colors = Vec::with_capacity(size);

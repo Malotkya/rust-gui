@@ -6,7 +6,7 @@ use winit::{
 };
 use std::rc::Rc;
 use crate::ApplicationInfo;
-use super::err::{SurfaceError, PipelineError};
+use super::err::RenderError;
 
 #[derive(Debug)]
 pub enum ContextError {
@@ -22,8 +22,6 @@ pub enum ContextError {
     InitSwapChainFailed,
     AquireImageFailed,
     InitShaderCompilerFailed,
-    SurfaceError(SurfaceError),
-    PipelineError(PipelineError),
     InitRenderPassFailed,
     InitFrameBufferFailed(usize),
     InitCommandPoolFailed,
@@ -42,7 +40,7 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub fn new(app_info:ApplicationInfo, window:&Window) -> Result<Rc<Self>, ContextError> {
+    pub fn new(app_info:&ApplicationInfo, window:&Window) -> Result<Rc<Self>, RenderError> {
         //SAFETY: make sure the entry is dropped last.
         let entry = unsafe { ash::Entry::load() }
             .map_err(|e|match e {

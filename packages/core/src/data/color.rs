@@ -76,10 +76,10 @@ impl Color {
 
     pub fn float32(&self) -> [f32; 4] {
         [
-            self.red.into(),
-            self.green.into(),
-            self.blue.into(),
-            self.alpha.into()
+            self.red as f32 / 255f32,
+            self.green as f32 / 255f32,
+            self.blue as f32 / 255f32,
+            self.alpha as f32 / 255f32,
         ]
     }
 
@@ -97,4 +97,9 @@ impl Color {
             .format(vk::Format::R8G8B8A8_UNORM)
             .offset(0)
     }
+}
+
+impl Color {
+    pub const BLACK:Color = Self{red:0, green:0, blue:0, alpha:255};
+    pub const WHITE:Color = Self{red:255, green:255, blue:255, alpha:255};
 }

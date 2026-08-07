@@ -3,6 +3,7 @@ use shaderc::{
     Error as ShadercError,
     ShaderKind
 };
+use super::err::RenderError;
 
 #[derive(Debug)]
 pub enum ShaderError {
@@ -37,7 +38,7 @@ struct ShaderPart {
 }
 
 impl ShaderPart {
-    fn new(device: &ash::Device, compiler:&shaderc::Compiler, src:&str, kind: ShaderKind, name:&str) ->Result<Self, ShaderError> {
+    fn new(device: &ash::Device, compiler:&shaderc::Compiler, src:&str, kind: ShaderKind, name:&str) ->Result<Self, RenderError> {
         let compile_options = shaderc::CompileOptions::new().unwrap();
         let raw_shader = compiler
             .compile_into_spirv(src, kind, name, "main", Some(&compile_options))
@@ -68,7 +69,7 @@ pub struct Shader<'a> {
 }
 
 impl<'a> Shader<'a> {
-    pub fn new(device: &'a ash::Device, compiler: &shaderc::Compiler) -> Result<Self, ShaderError> {
+    pub fn new(device: &'a ash::Device, compiler: &shaderc::Compiler) -> Result<Self, RenderError> {
         Ok(Self {
             vertex:   ShaderPart::new(device, compiler, VERTEX_SRC,   ShaderKind::Vertex,   "vertex.glsl")?,
             fragment: ShaderPart::new(device, compiler, FRAGMENT_SRC, ShaderKind::Fragment, "fragment.glsl")?,

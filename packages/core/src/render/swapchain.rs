@@ -8,7 +8,7 @@ use std::{
 };
 use super::{
     ctx::{DeviceContext, RenderContext},
-    err::ContextError
+    err::{ContextError, RenderError}
 };
 
 #[derive(Debug, Clone)]
@@ -38,7 +38,7 @@ impl Deref for Swapchain {
 }
 
 impl Swapchain {
-    pub unsafe fn new(ctx:DeviceContext, surface: &vk::SurfaceKHR, size:PhysicalSize<u32>) -> Result<Self, ContextError> {
+    pub unsafe fn new(ctx:DeviceContext, surface: &vk::SurfaceKHR, size:PhysicalSize<u32>) -> Result<Self, RenderError> {
         let loader = khr::swapchain::Device::new(&ctx.inner.instance, &ctx.device);
         
         let (swapchain_create_info, surface_format, extent)
@@ -48,7 +48,7 @@ impl Swapchain {
             .map_err(|_|ContextError::InitSwapChainFailed)?;
 
         let images = loader.get_swapchain_images(inner)
-            .map_err(|_|ContextError::SurfaceError(SurfaceError::AquireImageFailed))?;
+            .map_err(|_|SurfaceError::AquireImageFailed)?;
 
         let mut image_views = Vec::with_capacity(images.len());
         for (i, img) in images.iter().enumerate() {
@@ -72,7 +72,7 @@ impl Swapchain {
 
             image_views.push(
                 ctx.device.create_image_view(&create_view_info, None)
-                    .map_err(|_|ContextError::SurfaceError(SurfaceError::CreateImageViewFailed(i)))?
+                    .map_err(|_|SurfaceError::CreateImageViewFailed(i))?
             )
         }
 
@@ -105,13 +105,13 @@ impl Drop for Swapchain {
 }
 
 impl RenderContext {
-    pub fn create_swapchain_info(&self, surface: vk::SurfaceKHR, size:PhysicalSize<u32>) -> Result<(vk::SwapchainCreateInfoKHR<'_>, vk::SurfaceFormatKHR, vk::Extent2D), ContextError> {
+    pub fn create_swapchain_info(&self, surface: vk::SurfaceKHR, size:PhysicalSize<u32>) -> Result<(vk::SwapchainCreateInfoKHR<'_>, vk::SurfaceFormatKHR, vk::Extent2D), RenderError> {
         unsafe {
             let caps = self.surface_loader.get_physical_device_surface_capabilities(self.physical_device, surface)
                 .map_err(|_|ContextError::InitShaderCompilerFailed)?;
 
             let formats = self.surface_loader.get_physical_device_surface_formats(self.physical_device, surface)
-                .map_err(|_|ContextError::SurfaceError(SurfaceError::MissingFormats))?;
+                .map_err(|_|SurfaceError::MissingFormats)?;
 
             let surface_format = formats
                 .iter()
@@ -120,7 +120,7 @@ impl RenderContext {
                 .clone();
 
             let present_mode = self.surface_loader.get_physical_device_surface_present_modes(self.physical_device, surface)
-                .map_err(|_|ContextError::SurfaceError(SurfaceError::MissingModes))?
+                .map_err(|_|SurfaceError::MissingModes)?
                 .iter()
                 .cloned()
                 .find(|&m| m == vk::PresentModeKHR::MAILBOX)
