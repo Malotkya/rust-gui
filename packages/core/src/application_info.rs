@@ -38,7 +38,7 @@ impl ApiVersion for &str {
     }
 }
 
-pub(crate) struct ApplicationInfo<'a> {
+pub struct ApplicationInfo<'a> {
     pub name:&'a CStr,
     pub api_version: u32,
 }
