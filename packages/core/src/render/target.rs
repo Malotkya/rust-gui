@@ -16,7 +16,7 @@ use crate::{
         },
         pipeline::Pipeline,
         swapchain::Swapchain,
-        vertex::{GpuBatchData, VertexShape}
+        vertex::{GpuBatchData, VertexData, Size}
     }
 };
 
@@ -66,7 +66,7 @@ pub struct RenderTarget {
 
 impl RenderTarget {
     /// Draw a frame given a list of vertices.
-    pub fn draw(&mut self, clear_color:[f32; 4], vertices: &[VertexShape]) -> Result<(), RenderError> {
+    pub fn draw(&mut self, clear_color:[f32; 4], vertices: &[VertexData]) -> Result<(), RenderError> {
         // Acquire next image
         let timeout = u64::MAX;
         let image_index = unsafe {
@@ -217,6 +217,10 @@ impl RenderTarget {
             );
         }
     }
+
+    pub fn size(&self) -> Size {
+        self.swapchain.extent.into()
+    }
 }
 
 impl Drop for RenderTarget {
@@ -242,12 +246,14 @@ impl Drop for RenderTarget {
             for &fb in &self.framebuffers {
                 self.device.destroy_framebuffer(fb, None);
             }
-            /*
-            for pipeline in &mut self.pipelines {
-                pipeline.destroy(&self.device);
-            }*/
+            
+            while let Some(pipeline) = self.pipelines.pop() {
+                drop(pipeline);
+            }
             self.device.destroy_render_pass(self.render_pass, None);
             
+           drop(std::ptr::read(&self.swapchain));
+
             //self.swapchain.destroy(&self.device);
             self.ctx.surface_loader.destroy_surface(self.surface, None);
             self.device.destroy_device(None);
