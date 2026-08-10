@@ -23,7 +23,7 @@ pub struct Swapchain {
     pub extent: vk::Extent2D,
     pub image_format: vk::Format,
     pub image_views: Vec<vk::ImageView>,
-    pub images: Vec<vk::Image>,
+    //pub images: Vec<vk::Image>,
     inner: vk::SwapchainKHR,
     device: Rc<ash::Device>,
     pub loader: khr::swapchain::Device
@@ -44,10 +44,23 @@ impl Swapchain {
         let (swapchain_create_info, surface_format, extent)
             = ctx.inner.create_swapchain_info(*surface, size)?;
 
+        // Create the swapchain first
         let inner = loader.create_swapchain(&swapchain_create_info, None)
             .map_err(|_|ContextError::InitSwapChainFailed)?;
 
-        let images = loader.get_swapchain_images(inner)
+        // If anything fails after this, we need manual cleanup
+        // So wrap the remaining operations in a guard
+        let mut swapchain = Self {
+            inner,
+            extent,
+            image_format: surface_format.format,
+            image_views: Vec::new(),
+            loader,
+            device: ctx.device.clone(),
+        };
+
+        // Try to get images and create views
+        let images = swapchain.loader.get_swapchain_images(swapchain.inner)
             .map_err(|_|SurfaceError::AquireImageFailed)?;
 
         let mut image_views = Vec::with_capacity(images.len());
@@ -70,21 +83,22 @@ impl Swapchain {
                     layer_count: 1,
                 });
 
-            image_views.push(
-                ctx.device.create_image_view(&create_view_info, None)
-                    .map_err(|_|SurfaceError::CreateImageViewFailed(i))?
-            )
+            match ctx.device.create_image_view(&create_view_info, None) {
+                Ok(view) => image_views.push(view),
+                Err(_) => {
+                    // Clean up views created so far
+                    for view in image_views {
+                        ctx.device.destroy_image_view(view, None);
+                    }
+                    // Clean up the swapchain
+                    swapchain.loader.destroy_swapchain(swapchain.inner, None);
+                    return Err(SurfaceError::CreateImageViewFailed(i).into());
+                }
+            }
         }
 
-        Ok(Self { 
-            inner,
-            images,
-            image_views,
-            extent,
-            loader,
-            device: ctx.device.clone(),
-            image_format: surface_format.format,
-         })
+        swapchain.image_views = image_views;
+        Ok(swapchain)
     }
 }
 
@@ -93,10 +107,6 @@ impl Drop for Swapchain {
         unsafe {
             for view in &self.image_views {
                 self.device.destroy_image_view(*view, None);
-            }
-
-            for img in &self.images {
-                self.device.destroy_image(*img, None);
             }
 
             self.loader.destroy_swapchain(self.inner, None);
