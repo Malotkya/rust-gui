@@ -2,7 +2,7 @@ use ash::vk;
 use super::{
     err::RenderError,
     shader::Shader,
-    VertexShape
+    VertexData
 };
 use std::{
     ops::Deref,
@@ -31,8 +31,8 @@ impl Pipeline {
         let shader = Shader::new(device, compiler)?;
 
         let shader_stages = shader.stages();
-        let vertex_bindings = VertexShape::binding();
-        let vertex_attributes = VertexShape::attribute();
+        let vertex_bindings = VertexData::binding();
+        let vertex_attributes = VertexData::attribute();
         
         let vertex_input_info: vk::PipelineVertexInputStateCreateInfo<'_> = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_binding_descriptions(&vertex_bindings)
