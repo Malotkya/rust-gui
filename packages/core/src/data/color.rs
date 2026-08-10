@@ -9,6 +9,50 @@ pub struct Color {
     pub alpha: u8
 }
 
+impl Color {
+    pub fn new<R: Into<u8>, G: Into<u8>, B: Into<u8>>(red:R, green:G, blue:B) -> Self {
+        Self {
+            red: red.into(),
+            green: green.into(),
+            blue: blue.into(),
+            alpha: 255
+        }
+    }
+
+    pub fn new_alpha<R: Into<u8>, G: Into<u8>, B: Into<u8>, A:Into<u8>>(red:R, green:G, blue:B, alpha:A) -> Self {
+        Self {
+            red: red.into(),
+            green: green.into(),
+            blue: blue.into(),
+            alpha: alpha.into()
+        }
+    }
+
+    pub fn float32(&self) -> [f32; 4] {
+        [
+            self.red as f32 / 255f32,
+            self.green as f32 / 255f32,
+            self.blue as f32 / 255f32,
+            self.alpha as f32 / 255f32,
+        ]
+    }
+
+    pub(crate) fn binding() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::default()
+        .binding(1)
+        .stride(4) 
+        .input_rate(vk::VertexInputRate::INSTANCE)
+    }
+
+    pub(crate) fn attribute() -> vk::VertexInputAttributeDescription{
+        vk::VertexInputAttributeDescription::default()
+            .binding(1)
+            .location(1)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .offset(0)
+    }
+}
+
 impl<T: Into<u8> + Clone> From<&[T]> for Color {
     fn from(value: &[T]) -> Self {
         let mut it = value.iter();
@@ -55,49 +99,6 @@ impl<T: Into<u8>> From<[T; 4]> for Color {
     }
 }
 
-impl Color {
-    pub fn new<R: Into<u8>, G: Into<u8>, B: Into<u8>>(red:R, green:G, blue:B) -> Self {
-        Self {
-            red: red.into(),
-            green: green.into(),
-            blue: blue.into(),
-            alpha: 255
-        }
-    }
-
-    pub fn new_alpha<R: Into<u8>, G: Into<u8>, B: Into<u8>, A:Into<u8>>(red:R, green:G, blue:B, alpha:A) -> Self {
-        Self {
-            red: red.into(),
-            green: green.into(),
-            blue: blue.into(),
-            alpha: alpha.into()
-        }
-    }
-
-    pub fn float32(&self) -> [f32; 4] {
-        [
-            self.red as f32 / 255f32,
-            self.green as f32 / 255f32,
-            self.blue as f32 / 255f32,
-            self.alpha as f32 / 255f32,
-        ]
-    }
-
-    pub(crate) fn binding() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::default()
-        .binding(1)
-        .stride(4) 
-        .input_rate(vk::VertexInputRate::INSTANCE)
-    }
-
-    pub(crate) fn attribute() -> vk::VertexInputAttributeDescription{
-        vk::VertexInputAttributeDescription::default()
-            .binding(1)
-            .location(1)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .offset(0)
-    }
-}
 
 macro_rules! build_colors {
     (
