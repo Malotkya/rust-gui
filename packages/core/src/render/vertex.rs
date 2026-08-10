@@ -1,29 +1,51 @@
 use ash::vk;
 use crate::{
-    data::{Color, Position},
+    data::{Color, GpuVertexPosition},
     render::{
         err::{RenderTargetError, RenderError},
         ctx::DeviceContext
     }
 };
 
-pub struct VertexShape {
+pub use vk::PrimitiveTopology as Topology;
+
+pub struct Size {
+    pub width: f32,
+    pub height: f32
+}
+
+impl From<vk::Extent2D> for Size {
+    fn from(value: vk::Extent2D) -> Self {
+        Self { 
+            width: value.width as f32,
+            height: value.height as f32
+        }
+    }
+}
+
+pub trait VertexShape {
+    fn color(&self) -> Color;
+    fn positions(&self, extent:&Size) -> Vec<GpuVertexPosition>;
+    fn topology(&self) -> Topology;
+}
+
+pub struct VertexData {
     pub color: Color,
-    pub positions: Vec<Position>,
+    pub positions: Vec<GpuVertexPosition>,
     pub topology: vk::PrimitiveTopology
 }
 
-impl VertexShape {
+impl VertexData {
     pub(crate) fn binding() -> [vk::VertexInputBindingDescription; 2] {
         [
-            Position::binding(),
+            GpuVertexPosition::binding(),
             Color::binding()
         ]
     }
 
     pub(crate) fn attribute() -> [vk::VertexInputAttributeDescription; 2] {
         [
-            Position::attribute(),
+            GpuVertexPosition::attribute(),
             Color::attribute()
         ]
     }
@@ -35,8 +57,6 @@ pub struct GpuData {
     memory: vk::DeviceMemory,
     ctx: DeviceContext
 }
-
-
 
 impl GpuData {
     pub fn new(ctx:DeviceContext) -> Self {
@@ -130,7 +150,8 @@ impl Drop for GpuData {
 pub struct GpuBatchData {
     positions:GpuData,
     colors:GpuData,
-    pub commands: Vec<DrawCommand>
+    pub commands: Vec<DrawCommand>,
+    ctx: DeviceContext
 }
 
 impl GpuBatchData {
@@ -138,7 +159,8 @@ impl GpuBatchData {
         Self {
             positions: GpuData::new(ctx.clone()),
             colors: GpuData::new(ctx.clone()),
-            commands: Vec::new()
+            commands: Vec::new(),
+            ctx: ctx.clone()
         }
     }
 
@@ -146,7 +168,7 @@ impl GpuBatchData {
         self.positions.empty() && self.colors.empty()
     }
 
-    pub fn update(&mut self, shapes: &[VertexShape]) -> Result<(), RenderError>{
+    pub fn update(&mut self, shapes: &[VertexData]) -> Result<(), RenderError>{
         let size = shapes.len();
         let mut positions = Vec::with_capacity(size);
         let mut colors = Vec::with_capacity(size);
