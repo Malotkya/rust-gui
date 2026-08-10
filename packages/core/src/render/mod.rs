@@ -1,4 +1,4 @@
-pub use vertex::VertexShape;
+pub use vertex::{VertexData, VertexShape, Size, Topology};
 pub use context::RenderContext;
 pub use target::RenderTarget;
 pub use err::RenderError;
