@@ -6,6 +6,7 @@ use winit::{
 use std::{
     sync::Arc,
     rc::Rc, 
+    ops::Deref
 };
 use crate::{
     render::{
@@ -128,7 +129,7 @@ impl RenderTarget {
                 vk::SubpassContents::INLINE,
             );
 
-            self.record_commands();
+            self.record_commands(self.current_frame);
 
             self.device.cmd_end_render_pass(cmd_buf);
             self.device.end_command_buffer(cmd_buf)
@@ -177,12 +178,12 @@ impl RenderTarget {
         Ok(())
     }
 
-    unsafe fn record_commands(&self) {
+    unsafe fn record_commands(&self, frame:usize) {
         let buffers = self.buffer_data.bind_buffers();
         let offsets = [0, 0];
 
         self.device.cmd_bind_vertex_buffers(
-            self.command_buffers[0], //Only using first command buffer?
+            self.command_buffers[frame],
             0, // Start binding at slot 0
             &buffers,
             &offsets,
@@ -191,30 +192,33 @@ impl RenderTarget {
         if self.buffer_data.empty() {
             return;
         }
-
         let mut active_pipeline = vk::Pipeline::null();
+        let mut instance_offset = 0;
+
         for cmd in &self.buffer_data.commands {
             // Only swap pipelines if the next shape requires a different topology
-            let required_pipeline = self.pipelines[cmd.topology.as_raw() as usize].clone();
+            let required_pipeline = self.pipelines[cmd.topology.as_raw() as usize].deref().clone();
             
-            if *required_pipeline != active_pipeline {
+            if required_pipeline != active_pipeline {
                 self.device.cmd_bind_pipeline(
-                    self.command_buffers[0],
+                    self.command_buffers[frame],
                     vk::PipelineBindPoint::GRAPHICS,
-                    *required_pipeline,
+                    required_pipeline,
                 );
 
-                active_pipeline = *required_pipeline;
+                active_pipeline = required_pipeline;
             }
 
             // 3. Issue the draw call
             self.device.cmd_draw(
-                self.command_buffers[0],
+                self.command_buffers[frame],
                 cmd.vertex_count, // Number of positions in this specific shape
                 1,                // Instance count (1 instance per shape)
                 cmd.first_vertex, // Where this shape starts in the flat position buffer
-                cmd.color_index,  // Instanced offset pointing to this shape's color index
+                instance_offset,  // Instanced offset pointing to this shape's color index
             );
+
+            instance_offset +=1;
         }
     }
 
@@ -226,9 +230,10 @@ impl RenderTarget {
 impl Drop for RenderTarget {
     fn drop(&mut self) {
         unsafe {
+            let _ = self.device.wait_for_fences(&self.in_flight_fences, true, 5_000_000_000);
             let _ = self.device.device_wait_idle();
-        
-            //self.buffer_data.destroy(&self.device);
+            
+            drop(std::ptr::read(&self.buffer_data));
 
             for &f in &self.in_flight_fences {
                 self.device.destroy_fence(f, None);
@@ -250,11 +255,11 @@ impl Drop for RenderTarget {
             while let Some(pipeline) = self.pipelines.pop() {
                 drop(pipeline);
             }
+
             self.device.destroy_render_pass(self.render_pass, None);
             
            drop(std::ptr::read(&self.swapchain));
 
-            //self.swapchain.destroy(&self.device);
             self.ctx.surface_loader.destroy_surface(self.surface, None);
             self.device.destroy_device(None);
 
