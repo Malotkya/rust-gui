@@ -72,11 +72,6 @@ impl GpuData {
         let needed_size = std::mem::size_of_val(data) as u64;
 
         if needed_size > self.size {
-            if self.buffer != vk::Buffer::null() { unsafe {
-                self.ctx.device.destroy_buffer(self.buffer, None);
-                self.ctx.device.free_memory(self.memory, None);
-            } }
-
             self.resize(needed_size)?;
         }
 
@@ -100,10 +95,7 @@ impl GpuData {
             return Ok(());
         }
 
-        if self.buffer != vk::Buffer::null() { unsafe {
-            self.ctx.device.destroy_buffer(self.buffer, None);
-            self.ctx.device.free_memory(self.memory, None);
-        } }
+        unsafe { self.destory() };
         
         let usage = vk::BufferUsageFlags::VERTEX_BUFFER;
         let properties = vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
@@ -140,15 +132,18 @@ impl GpuData {
     fn empty(&self) -> bool {
         self.size == 0
     }
-}
 
-impl Drop for GpuData {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() { unsafe {
+    pub unsafe fn destory(&mut self) {
+        if self.buffer != vk::Buffer::null() {
             self.ctx.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+
+        if self.memory != vk::DeviceMemory::null() {
             self.ctx.device.free_memory(self.memory, None);
-        } }
-    }
+            self.memory = vk::DeviceMemory::null();
+        }
+    } 
 }
 
 pub struct GpuBatchData {
@@ -207,6 +202,11 @@ impl GpuBatchData {
             self.positions.buffer,
             self.colors.buffer
         ]
+    }
+
+    pub unsafe fn destory(&mut self) {
+        self.positions.destory();
+        self.colors.destory();
     }
 }
 

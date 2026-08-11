@@ -91,19 +91,15 @@ impl Swapchain {
 
         Ok(swapchain)
     }
-}
 
-impl Drop for Swapchain {
-    fn drop(&mut self) {
-        unsafe {
-            while let Some(view) = self.image_views.pop() {
-                self.device.destroy_image_view(view, None);
-            }
-            
-            if self.inner != vk::SwapchainKHR::null() {
-                println!("Swapcahin: {:?}", self.inner);
-                self.loader.destroy_swapchain(self.inner, None);
-            }
+    pub unsafe fn destory(&mut self) {
+        while let Some(view) = self.image_views.pop() {
+            self.device.destroy_image_view(view, None);
+        }
+        
+        if self.inner != vk::SwapchainKHR::null() {
+            self.loader.destroy_swapchain(self.inner, None);
+            self.inner = vk::SwapchainKHR::null();
         }
     }
 }

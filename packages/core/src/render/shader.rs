@@ -34,7 +34,6 @@ const FRAGMENT_SRC:&'static str = r#"
 struct ShaderPart {
     raw_shader: Vec<u32>,
     module: vk::ShaderModule,
-    
 }
 
 impl ShaderPart {
@@ -83,13 +82,22 @@ impl<'a> Shader<'a> {
             self.fragment.stage(vk::ShaderStageFlags::FRAGMENT)
         ]
     }
+
+    pub unsafe fn destroy(&mut self) {
+        if self.vertex.module != vk::ShaderModule::null() {
+            self.device.destroy_shader_module(self.vertex.module, None);
+            self.vertex.module = vk::ShaderModule::null()
+        }
+
+        if self.fragment.module != vk::ShaderModule::null() {
+            self.device.destroy_shader_module(self.fragment.module, None);
+            self.fragment.module = vk::ShaderModule::null()
+        }
+    }
 }
 
 impl<'a> Drop for Shader<'a> {
     fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_shader_module(self.vertex.module, None);
-            self.device.destroy_shader_module(self.fragment.module, None);
-        }
+        unsafe { self.destroy() }
     }
 }

@@ -113,6 +113,18 @@ impl Pipeline {
 
         Ok(pipelines)
     }
+
+    pub unsafe fn destory(&mut self) {
+        if self.inner != vk::Pipeline::null() { 
+            self.device.destroy_pipeline(self.inner, None);
+            self.inner = vk::Pipeline::null();
+        }
+
+        if self.layout != vk::PipelineLayout::null() {
+            self.device.destroy_pipeline_layout(self.layout, None);
+            self.layout = vk::PipelineLayout::null()
+        }
+    }
 }
 
 impl Deref for Pipeline {
@@ -120,14 +132,5 @@ impl Deref for Pipeline {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
-    }
-}
-
-impl Drop for Pipeline {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_pipeline(self.inner, None);
-            self.device.destroy_pipeline_layout(self.layout, None);
-        }
     }
 }

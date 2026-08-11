@@ -225,45 +225,46 @@ impl RenderTarget {
     pub fn size(&self) -> Size {
         self.swapchain.extent.into()
     }
-}
 
-impl Drop for RenderTarget {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = self.device.wait_for_fences(&self.in_flight_fences, true, 5_000_000_000);
-            let _ = self.device.device_wait_idle();
-            
-            drop(std::ptr::read(&self.buffer_data));
+    pub unsafe fn destory(&mut self) {
+        let _ = self.device.wait_for_fences(&self.in_flight_fences, true, 5_000_000_000);
+        let _ = self.device.device_wait_idle();
 
-            for &f in &self.in_flight_fences {
-                self.device.destroy_fence(f, None);
-            }
-            for &s in &self.image_available_semaphores {
-                self.device.destroy_semaphore(s, None);
-            }
-            for &s in &self.render_finished_semaphores {
-                self.device.destroy_semaphore(s, None);
-            }
+        self.buffer_data.destory();
 
+        while let Some(fence) = self.in_flight_fences.pop() {
+            self.device.destroy_fence(fence, None);
+        }
+
+        while let Some(semaphore) = self.image_available_semaphores.pop() {
+            self.device.destroy_semaphore(semaphore, None);
+        }
+        
+        while let Some(semaphore) = self.render_finished_semaphores.pop() {
+            self.device.destroy_semaphore(semaphore, None);
+        }
+        
+        if self.command_pool != vk::CommandPool::null() {
             self.device.free_command_buffers(self.command_pool, &self.command_buffers);
             self.device.destroy_command_pool(self.command_pool, None);
-
-            for &fb in &self.framebuffers {
-                self.device.destroy_framebuffer(fb, None);
-            }
-            
-            while let Some(pipeline) = self.pipelines.pop() {
-                drop(pipeline);
-            }
-
-            self.device.destroy_render_pass(self.render_pass, None);
-            
-           drop(std::ptr::read(&self.swapchain));
-
-            self.ctx.surface_loader.destroy_surface(self.surface, None);
-            self.device.destroy_device(None);
-
+            self.command_pool = vk::CommandPool::null()
         }
+
+        while let Some(framebuffer) = self.framebuffers.pop() {
+            self.device.destroy_framebuffer(framebuffer, None);
+        }
+
+        while let Some(mut pipeline) = self.pipelines.pop() {
+            pipeline.destory();
+        }
+
+        if self.render_pass != vk::RenderPass::null() {
+            self.device.destroy_render_pass(self.render_pass, None);
+            self.render_pass = vk::RenderPass::null();
+        }
+
+        self.ctx.surface_loader.destroy_surface(self.surface, None);
+        self.device.destroy_device(None);
     }
 }
 
