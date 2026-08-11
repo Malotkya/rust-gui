@@ -63,10 +63,10 @@ impl Swapchain {
         let images = swapchain.loader.get_swapchain_images(swapchain.inner)
             .map_err(|_|SurfaceError::AquireImageFailed)?;
 
-        let mut image_views = Vec::with_capacity(images.len());
-        for (i, img) in images.iter().enumerate() {
+        swapchain.image_views.reserve(images.len());
+        for (i, img) in images.into_iter().enumerate() {
             let create_view_info = vk::ImageViewCreateInfo::default()
-                .image(*img)
+                .image(img)
                 .view_type(vk::ImageViewType::TYPE_2D)
                 .format(surface_format.format)
                 .components(vk::ComponentMapping {
@@ -83,21 +83,12 @@ impl Swapchain {
                     layer_count: 1,
                 });
 
-            match ctx.device.create_image_view(&create_view_info, None) {
-                Ok(view) => image_views.push(view),
-                Err(_) => {
-                    // Clean up views created so far
-                    for view in image_views {
-                        ctx.device.destroy_image_view(view, None);
-                    }
-                    // Clean up the swapchain
-                    swapchain.loader.destroy_swapchain(swapchain.inner, None);
-                    return Err(SurfaceError::CreateImageViewFailed(i).into());
-                }
-            }
+            swapchain.image_views.push(
+                ctx.device.create_image_view(&create_view_info, None)
+                    .map_err(|_|SurfaceError::CreateImageViewFailed(i))?
+            );
         }
 
-        swapchain.image_views = image_views;
         Ok(swapchain)
     }
 }
@@ -105,11 +96,14 @@ impl Swapchain {
 impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
-            for view in &self.image_views {
-                self.device.destroy_image_view(*view, None);
+            while let Some(view) = self.image_views.pop() {
+                self.device.destroy_image_view(view, None);
             }
-
-            self.loader.destroy_swapchain(self.inner, None);
+            
+            if self.inner != vk::SwapchainKHR::null() {
+                println!("Swapcahin: {:?}", self.inner);
+                self.loader.destroy_swapchain(self.inner, None);
+            }
         }
     }
 }
