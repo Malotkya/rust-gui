@@ -7,6 +7,20 @@ pub enum Position {
     Reference(f32, f32)
 }
 
+fn coordinate_to_reference(x:f32, y:f32, width:f32, height:f32) -> (f32, f32) {
+    (
+        (x / width)  * 2.0 - 1.0,
+        (y / height) * 2.0
+    )
+}
+
+fn reference_to_coordinate(x:f32, y:f32, width:f32, height:f32) -> (f32, f32) {
+    (
+        (x + 1.0) * 0.5 * width,
+        (1.0 - y) * 0.5 * height
+    )
+}
+
 impl Position {
     pub fn new_coordinate<X: Into<i32>, Y: Into<i32>>(x:X, y:Y) -> Self {
         Self::Coordinate(x.into(), y.into())
@@ -22,24 +36,66 @@ impl Position {
                 x: *x,
                 y: *y
             },
-            Self::Coordinate(x, y) => VertexPosition {
-                x: ((*x as f32) / extent.width)  * 2.0 - 1.0,
-                y: 1.0 - ((*y as f32) / extent.height) * 2.0
+            Self::Coordinate(x, y) => {
+                let (x, y) = coordinate_to_reference(*x as f32, *y as f32, extent.width, extent.height);
+                VertexPosition {x, y}
             }
         }
     }
 
-    pub fn format_coord(&self, extent:&Size) -> VertexPosition {
+    pub fn format_coord(&self, extent:&Size) -> VertexCordinate {
         match self {
-            Self::Reference(x, y) => VertexPosition {
-                x: (x + 1.0) * 0.5 * extent.width,
-                y: (1.0 - y) * 0.5 * extent.height,
+            Self::Reference(x, y) => {
+                let (x, y) = reference_to_coordinate(*x, *y, extent.width, extent.height);
+                VertexCordinate {x, y}
             },
-            Self::Coordinate(x, y) => VertexPosition {
+            Self::Coordinate(x, y) => VertexCordinate {
                 x: (*x as f32),
                 y: (*y as f32)
             }
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct VertexCordinate {
+    pub x: f32,
+    pub y: f32
+}
+
+impl VertexCordinate {
+    pub fn add(&self, other:&Self) -> Self {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y
+        }
+    }
+
+    pub fn sub(&self, other:&Self) -> Self {
+        Self {
+            x: self.x - other.x,
+            y: self.y - other.y
+        }
+    }
+
+    pub fn mul(&self, other:&Self) -> Self {
+        Self {
+            x: self.x * other.x,
+            y: self.y * other.y
+        }
+    }
+
+    pub fn div(&self, other:&Self) -> Self {
+        Self {
+            x: self.x / other.x,
+            y: self.y / other.y
+        }
+    }
+
+    pub fn to_position(&self, extent:&Size) -> VertexPosition {
+        let (x, y) = coordinate_to_reference(self.x, self.y, extent.width, extent.height);
+        VertexPosition{x, y}
     }
 }
 
@@ -94,18 +150,9 @@ impl VertexPosition {
         }
     }
 
-    pub fn to_coordinate(&self, extent:&Size) -> Self {
-        Self {
-            x: (self.x + 1.0) * 0.5 * extent.width,
-            y: (1.0 - self.y) * 0.5 * extent.height,
-        }
-    }
-
-    pub fn from_cordinate(&self, extent:&Size) -> Self {
-        Self {
-            x: (self.x / extent.width)  * 2.0 - 1.0,
-            y: 1.0 - (self.y / extent.height) * 2.0
-        }
+    pub fn to_coordinate(&self, extent:&Size) -> VertexCordinate {
+        let (x, y) = reference_to_coordinate(self.x, self.y, extent.width, extent.height);
+        VertexCordinate{x, y}
     }
 }
 
