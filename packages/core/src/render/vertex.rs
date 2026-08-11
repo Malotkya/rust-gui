@@ -1,6 +1,6 @@
 use ash::vk;
 use crate::{
-    data::{Color, GpuVertexPosition},
+    data::{Color, VertexPosition},
     render::{
         err::{RenderTargetError, RenderError},
         ctx::DeviceContext
@@ -25,27 +25,27 @@ impl From<vk::Extent2D> for Size {
 
 pub trait VertexShape {
     fn color(&self) -> Color;
-    fn positions(&self, extent:&Size) -> Vec<GpuVertexPosition>;
+    fn positions(&self, extent:&Size) -> Vec<VertexPosition>;
     fn topology(&self) -> Topology;
 }
 
 pub struct VertexData {
     pub color: Color,
-    pub positions: Vec<GpuVertexPosition>,
+    pub positions: Vec<VertexPosition>,
     pub topology: vk::PrimitiveTopology
 }
 
 impl VertexData {
     pub(crate) fn binding() -> [vk::VertexInputBindingDescription; 2] {
         [
-            GpuVertexPosition::binding(),
+            VertexPosition::binding(),
             Color::binding()
         ]
     }
 
     pub(crate) fn attribute() -> [vk::VertexInputAttributeDescription; 2] {
         [
-            GpuVertexPosition::attribute(),
+            VertexPosition::attribute(),
             Color::attribute()
         ]
     }
@@ -68,7 +68,7 @@ impl GpuData {
         }
     }
 
-    pub fn update<'a, T: Sized>(&'a mut self, data:&[T]) -> Result<UnmapRef<'a>, RenderError> {
+    pub fn update<'a, T: Sized>(&'a mut self, data:&[T]) -> Result<(), RenderError> {
         let needed_size = std::mem::size_of_val(data) as u64;
 
         if needed_size > self.size {
@@ -81,14 +81,18 @@ impl GpuData {
         }
 
         unsafe {
-            self.ctx.device.map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::default())
-                .map_err(|_|RenderTargetError::FailedToWriteToDeviceMemory)?;
+            let ptr = self.ctx.device.map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::default())
+                .map_err(|_|RenderTargetError::FailedToWriteToDeviceMemory)? as *mut T;
+            std::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                ptr,
+                data.len()
+            );
+
+            self.ctx.device.unmap_memory(self.memory);
         }
 
-        Ok(UnmapRef {
-            device: &self.ctx.device,
-            memory: &self.memory
-        })
+        Ok(())
     }
 
     pub fn resize(&mut self, size:vk::DeviceSize) -> Result<(), RenderError>{
@@ -191,8 +195,8 @@ impl GpuBatchData {
             offset += vertex_count;
         }
 
-        let _ = self.positions.update(&positions)?;
-        let _ = self.colors.update( &colors)?;
+        self.positions.update(&positions)?;
+        self.colors.update( &colors)?;
         self.commands = commands;
 
         Ok(())
@@ -211,23 +215,4 @@ pub struct DrawCommand {
     pub first_vertex: u32,
     pub color_index: u32,
     pub topology: vk::PrimitiveTopology
-}
-
-pub struct UnmapRef<'a> {
-    device:&'a ash::Device,
-    memory: &'a vk::DeviceMemory,
-}
-
-impl<'a> UnmapRef<'a> {
-    pub fn unmap(&self) {
-        unsafe {
-            self.device.unmap_memory(*self.memory);
-        }
-    }
-}
-
-impl<'a> Drop for UnmapRef<'a> {
-    fn drop(&mut self) {
-        self.unmap()
-    }
 }

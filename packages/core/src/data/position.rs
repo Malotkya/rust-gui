@@ -16,26 +16,26 @@ impl Position {
         Self::Reference(x.into(), y.into())
     }
 
-    pub fn format_ref(&self, extent:&Size) -> GpuVertexPosition {
+    pub fn format_ref(&self, extent:&Size) -> VertexPosition {
         match self {
-            Self::Reference(x, y) => GpuVertexPosition {
+            Self::Reference(x, y) => VertexPosition {
                 x: *x,
                 y: *y
             },
-            Self::Coordinate(x, y) => GpuVertexPosition {
+            Self::Coordinate(x, y) => VertexPosition {
                 x: ((*x as f32) / extent.width)  * 2.0 - 1.0,
                 y: 1.0 - ((*y as f32) / extent.height) * 2.0
             }
         }
     }
 
-    pub fn format_coord(&self, extent:&Size) -> GpuVertexPosition {
+    pub fn format_coord(&self, extent:&Size) -> VertexPosition {
         match self {
-            Self::Reference(x, y) => GpuVertexPosition {
+            Self::Reference(x, y) => VertexPosition {
                 x: (x + 1.0) * 0.5 * extent.width,
                 y: (1.0 - y) * 0.5 * extent.height,
             },
-            Self::Coordinate(x, y) => GpuVertexPosition {
+            Self::Coordinate(x, y) => VertexPosition {
                 x: (*x as f32),
                 y: (*y as f32)
             }
@@ -45,16 +45,17 @@ impl Position {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct GpuVertexPosition {
+pub struct VertexPosition {
     pub x: f32,
     pub y: f32
 }
 
-impl GpuVertexPosition {
+impl VertexPosition {
     pub(crate) fn binding() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride((std::mem::size_of::<f32>() * 2) as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
     }
 
     pub(crate) fn attribute() -> vk::VertexInputAttributeDescription{
