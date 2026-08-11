@@ -1,6 +1,6 @@
 use crate::{
-    data::GpuVertexPosition,
-    render::vertex::{VertexShape, Size, Topology}
+    data::{VertexCordinate, VertexPosition},
+    render::vertex::{Size, Topology, VertexShape}
 };
 use super::{Color, Position};
 
@@ -14,7 +14,7 @@ impl VertexShape for Triangle {
         self.color.clone()
     }
 
-    fn positions(&self, extent:&Size) -> Vec<GpuVertexPosition> {
+    fn positions(&self, extent:&Size) -> Vec<VertexPosition> {
         self.points.iter()
             .map(|p|p.format_ref(extent))
             .collect()
@@ -36,16 +36,16 @@ impl VertexShape for Rectangle {
         self.color.clone()
     }
 
-    fn positions(&self, size:&Size) -> Vec<GpuVertexPosition> {
+    fn positions(&self, size:&Size) -> Vec<VertexPosition> {
         let start = self.pos.format_coord(size);
         vec![
-            start.from_cordinate(size),
-            start.add(&GpuVertexPosition { x: 0.0, y: self.size.height })
-                .from_cordinate(size),
-            start.add(&GpuVertexPosition { x: self.size.width, y: 0.0 })
-                .from_cordinate(size),
-            start.add(&GpuVertexPosition { x: self.size.width, y: self.size.height })
-                .from_cordinate(size)
+            start.to_position(size),
+            start.add(&VertexCordinate { x: 0.0, y: self.size.height })
+                .to_position(size),
+            start.add(&VertexCordinate { x: self.size.width, y: 0.0 })
+                .to_position(size),
+            start.add(&VertexCordinate { x: self.size.width, y: self.size.height })
+                .to_position(size)
         ]
     }
 
@@ -71,16 +71,16 @@ impl VertexShape for Circle {
         Topology::TRIANGLE_STRIP
     }
 
-    fn positions(&self, extent:&Size) -> Vec<GpuVertexPosition> {
+    fn positions(&self, extent:&Size) -> Vec<VertexPosition> {
         let mut vertcies = Vec::with_capacity(CIRCLE_SEGMENTS + 2);
-        let offset = self.pos.format_coord(extent).add(&GpuVertexPosition { x: self.radius, y: self.radius });
+        let offset = self.pos.format_coord(extent).add(&VertexCordinate { x: self.radius, y: self.radius });
 
         vertcies.push(self.pos.format_ref(extent));
         for i in 0..=CIRCLE_SEGMENTS {
             let theta = (i as f32) / (CIRCLE_SEGMENTS as f32) * 2.0 *  std::f32::consts::PI;
             vertcies.push(
-                offset.mul(&GpuVertexPosition { x: theta.cos(), y: theta.sin() })
-                    .from_cordinate(extent)
+                offset.mul(&VertexCordinate { x: theta.cos(), y: theta.sin() })
+                    .to_position(extent)
             );
         }
 
