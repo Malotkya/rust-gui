@@ -101,7 +101,10 @@ impl RenderContext {
                 }
             ).ok_or_else(||ContextError::PhysicalDeviceNotFound)?;
 
-        
+        // No Longer using this surface.
+        unsafe {
+            surface_loader.destroy_surface(surface, None);
+        }
 
         Ok(Rc::new(Self {
             entry,
