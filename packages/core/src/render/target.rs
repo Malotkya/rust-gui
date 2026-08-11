@@ -258,6 +258,8 @@ impl RenderTarget {
             pipeline.destory();
         }
 
+        self.swapchain.destory();
+
         if self.render_pass != vk::RenderPass::null() {
             self.device.destroy_render_pass(self.render_pass, None);
             self.render_pass = vk::RenderPass::null();
