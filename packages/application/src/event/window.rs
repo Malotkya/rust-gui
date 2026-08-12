@@ -1,6 +1,7 @@
 use std::time::Instant;
 use super::*;
 
+#[derive(Debug)]
 pub(crate) struct EventHistory(HashMap<DeviceId, (PhysicalPosition<f64>, Instant)>);
 
 impl EventHistory {
