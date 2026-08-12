@@ -1,12 +1,13 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::panic::{RefUnwindSafe, UnwindSafe};
-use std::rc::{Weak, Rc};
 use std::sync::{
     atomic::{AtomicUsize, Ordering}
 };
 use std::fmt;
 
+mod target;
+pub use target::*;
 mod types;
 pub use types::*;
 mod window;
@@ -55,8 +56,24 @@ impl Event {
         todo!()
     }
 
+    #[inline]
     pub fn is_actionable(&self) -> bool {
         self.actionable
+    }
+
+    #[inline]
+    pub fn detail<T: 'static>(&self) -> Option<&T> {
+        self.detail.downcast_ref()
+    }
+
+    #[inline]
+    pub fn detail_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.detail.downcast_mut()
+    }
+
+    #[inline]
+    pub fn clone_detail<T: Clone + 'static>(&self) -> Option<T> {
+        self.detail::<T>().map(|v|v.clone())
     }
 }
 
@@ -65,6 +82,7 @@ impl RefUnwindSafe for Event {}
 
 pub type EventListener = fn(&Event) -> ();
 
+#[derive(Debug)]
 struct EventHandler {
     id: usize,
     listener: EventListener,
@@ -92,128 +110,3 @@ impl EventHandler {
     }
 }
 
-pub struct EventTarget {
-    map: HashMap<String, Vec<EventHandler>>,
-    pub(crate) parrent:Option<Weak<EventTarget>>,
-}
-
-impl EventTarget {
-    pub fn new() -> Rc<Self> {
-        Rc::new(Self {
-            map: HashMap::new(),
-            parrent: None
-        })
-    }
-
-    pub fn new_parrent(parrent:&Rc<Self>) -> Rc<Self> {
-        Rc::new(Self {
-            map: HashMap::new(),
-            parrent: Some(Rc::downgrade(parrent))
-        })
-    }
-
-    #[inline]
-    #[allow(invalid_reference_casting)]
-    fn deref_mut(self: &Rc<Self>) -> &mut Self {
-        unsafe {
-            &mut *(
-                (self as *const Rc<Self> as *mut Rc<Self> as *mut u8) as *mut Self
-            )
-        }
-    }
-
-    pub(crate) fn parrent_mut(&mut self) -> Option<&mut Self> {
-        if let Some(parrent) = &mut self.parrent{
-            let ptr = parrent as *mut Weak<Self> as *mut u8;
-            Some( unsafe {
-                 &mut *(ptr as *mut Self)
-            } );
-        }
-
-        None
-    }
-
-    pub fn parrent(&self) -> Option<&Self> {
-        if let Some(parrent) = &self.parrent {
-            let ptr = parrent as *const Weak<EventTarget> as *const u8;
-            Some( unsafe {
-                & *(ptr as *const EventTarget)
-            } );
-        }
-
-        None
-    }
-
-    fn handle_event(&mut self, event:&Event) -> Result<(), String> {
-        let name = event.type_name.to_ascii_lowercase();
-        let mut response:Result<(), String> = Ok(());
-
-        if let Some(list) = self.map.remove(&name) {
-
-            let mut new_list = Vec::with_capacity(list.len());
-            let mut it = list.into_iter();
-
-            while let Some(handler) = it.next() {
-                match handler.call(event) {
-                    Ok(once) => if !once {
-                        new_list.push(handler)
-                    },
-                    Err(msg) => {
-                        response = Err(msg);
-                        break;
-                    }
-                }
-
-                if event.bubbles == BubbleEventState::Stop {
-                    break;
-                }
-            }
-
-            new_list.extend(it);
-        }
-
-        response
-    }
-
-    fn dispatch_inner(&mut self, event:&Event, error_count:usize) -> Result<(), &'static str> {
-        if error_count > 10 {
-            return Err("Possible recursion occured!");
-        }
-
-        if let Err(msg) = self.handle_event(event) {
-            return self.dispatch_inner(&Event::new("Error", msg), error_count+1);
-        }
-
-        if event.bubbles == BubbleEventState::Continue && let Some(parrent) = self.parrent_mut() {
-            return parrent.dispatch_inner(event, error_count);
-        }
-
-        Ok(())
-    }
-
-    pub fn dispatch_event(self:&Rc<Self>, event: &Event) -> Result<(), &'static str>{
-        self.deref_mut().dispatch_inner(event, 0)
-    }
-
-    fn add_handler(&mut self, type_name: &str, handler:EventHandler) -> usize {
-        let id = handler.id;
-        self.map.entry(type_name.to_ascii_lowercase())
-            .or_insert(Vec::with_capacity(1))
-            .push(handler);
-        id
-    }
-
-    pub fn add_event_listener(self:&Rc<Self>, type_name: &str, listener: EventListener) -> usize {
-        self.deref_mut().add_handler(
-            type_name,
-            EventHandler::new(listener, false)
-        )
-    }
-
-    pub fn add_event_listener_once(self:&Rc<Self>, type_name: &str, listener: EventListener) -> usize {
-        self.deref_mut().add_handler(
-            type_name,
-            EventHandler::new(listener, true)
-        )
-    }
-}
