@@ -2,13 +2,15 @@ use ash::vk;
 use crate::{
     data::{Color, VertexPosition},
     render::{
-        err::{RenderTargetError, RenderError},
+        err::RenderError,
         ctx::DeviceContext
     }
 };
+use std::fmt;
 
 pub use vk::PrimitiveTopology as Topology;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Size {
     pub width: f32,
     pub height: f32
@@ -29,6 +31,7 @@ pub trait VertexShape {
     fn topology(&self) -> Topology;
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct VertexData {
     pub color: Color,
     pub positions: Vec<VertexPosition>,
@@ -51,11 +54,34 @@ impl VertexData {
     }
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct GpuData {
     size: u64,
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     ctx: DeviceContext
+}
+
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum GpuDataError {
+    FailedToWriteToDeviceMemory,
+    FailedToInitBuffer,
+    MissingMemoryType,
+    FailedToInitBufferMemory,
+    FailedToBindBufferToMemory
+}
+
+impl fmt::Display for GpuDataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToWriteToDeviceMemory => write!(f, "Failed while writing to DeviceMemory!"),
+            Self::FailedToInitBuffer => write!(f, "Failed to initalize DataBuffer!"),
+            Self::MissingMemoryType => write!(f, "MemoryType missing!"),
+            Self::FailedToInitBufferMemory => write!(f, "Failed to initalize DeviceMemory!"),
+            Self::FailedToBindBufferToMemory => write!(f, "Failed to bind DataBuffer to DeviceMemory!")
+        }
+    }
 }
 
 impl GpuData {
@@ -77,7 +103,7 @@ impl GpuData {
 
         unsafe {
             let ptr = self.ctx.device.map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::default())
-                .map_err(|_|RenderTargetError::FailedToWriteToDeviceMemory)? as *mut T;
+                .map_err(|_|GpuDataError::FailedToWriteToDeviceMemory)? as *mut T;
             std::ptr::copy_nonoverlapping(
                 data.as_ptr(),
                 ptr,
@@ -106,12 +132,12 @@ impl GpuData {
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         self.buffer = unsafe { self.ctx.device.create_buffer(&buffer_create_info, None) }
-            .map_err(|_|RenderTargetError::FailedToInitBuffer)?;
+            .map_err(|_|GpuDataError::FailedToInitBuffer)?;
 
         let mem_requirements = unsafe { self.ctx.device.get_buffer_memory_requirements(self.buffer) };
 
         let mem_type = self.ctx.inner.find_memory_type(mem_requirements.memory_type_bits, properties)
-            .ok_or_else(||RenderTargetError::MissingMemoryType)?;
+            .ok_or_else(||GpuDataError::MissingMemoryType)?;
 
         let alloc_info = vk::MemoryAllocateInfo::default()
             .allocation_size(mem_requirements.size)
@@ -119,11 +145,11 @@ impl GpuData {
 
         self.memory = unsafe {
             self.ctx.device.allocate_memory(&alloc_info, None)
-        }.map_err(|_|RenderTargetError::FailedToInitBufferMemory)?;
+        }.map_err(|_|GpuDataError::FailedToInitBufferMemory)?;
 
         unsafe {
             self.ctx.device.bind_buffer_memory(self.buffer, self.memory, 0)
-        }.map_err(|_|RenderTargetError::FailedToBindBufferToMemory)?;
+        }.map_err(|_|GpuDataError::FailedToBindBufferToMemory)?;
 
         self.size = size;
         Ok(())
@@ -151,6 +177,18 @@ pub struct GpuBatchData {
     colors:GpuData,
     pub commands: Vec<DrawCommand>,
     ctx: DeviceContext
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for GpuBatchData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GpuBatchData")
+            .field("positions", &self.positions)
+            .field("colors", &self.colors)
+            .field("commands(count)", &self.commands.len())
+            .field("ctx", &self.ctx)
+            .finish()
+    }
 }
 
 impl GpuBatchData {

@@ -3,30 +3,68 @@ use winit::{
     dpi::PhysicalSize,
 };
 use std::{
-    ops::Deref,
-    rc::Rc
+    fmt,
+    ops::Deref
 };
 use super::{
+    Device,
     ctx::{DeviceContext, RenderContext},
-    err::{ContextError, RenderError}
+    err::RenderError
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum SurfaceError {
-    MissingFormats,
-    MissingModes,
+    InitFailed,
+    UnableToGetCapabilities
+}
+
+impl fmt::Display for SurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InitFailed => write!(f, "Failed to Initalize Surface"),
+            Self::UnableToGetCapabilities => write!(f, "Unable to get Surface Capabilities!")
+        }
+    }
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum SwapchainError {
+    InitFailed,
     AquireImageFailed,
     CreateImageViewFailed(usize)
+}
+
+impl fmt::Display for SwapchainError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InitFailed => write!(f, "Failed to Initalize Swapchain!"),
+            Self::AquireImageFailed => write!(f, "Failed to aquire swapchian Images!"),
+            Self::CreateImageViewFailed(index) => write!(f, "Failed to create ImageView({})!", index)
+        }
+    }
 }
 
 pub struct Swapchain {
     pub extent: vk::Extent2D,
     pub image_format: vk::Format,
     pub image_views: Vec<vk::ImageView>,
-    //pub images: Vec<vk::Image>,
     inner: vk::SwapchainKHR,
-    device: Rc<ash::Device>,
+    device: Device,
     pub loader: khr::swapchain::Device
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for Swapchain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Swapchain")
+            .field("extent", &self.extent)
+            .field("image_fomrat", &self.image_format)
+            .field("inner", &self.inner)
+            .field("device", &self.device)
+            .field("loader", &( &self.loader as *const khr::swapchain::Device) )
+            .finish()
+    }
 }
 
 impl Deref for Swapchain {
@@ -46,7 +84,7 @@ impl Swapchain {
 
         // Create the swapchain first
         let inner = loader.create_swapchain(&swapchain_create_info, None)
-            .map_err(|_|ContextError::InitSwapChainFailed)?;
+            .map_err(|_|SwapchainError::InitFailed)?;
 
         // If anything fails after this, we need manual cleanup
         // So wrap the remaining operations in a guard
@@ -61,7 +99,7 @@ impl Swapchain {
 
         // Try to get images and create views
         let images = swapchain.loader.get_swapchain_images(swapchain.inner)
-            .map_err(|_|SurfaceError::AquireImageFailed)?;
+            .map_err(|_|SurfaceError::UnableToGetCapabilities)?;
 
         swapchain.image_views.reserve(images.len());
         for (i, img) in images.into_iter().enumerate() {
@@ -85,7 +123,7 @@ impl Swapchain {
 
             swapchain.image_views.push(
                 ctx.device.create_image_view(&create_view_info, None)
-                    .map_err(|_|SurfaceError::CreateImageViewFailed(i))?
+                    .map_err(|_|SwapchainError::CreateImageViewFailed(i))?
             );
         }
 
@@ -108,10 +146,10 @@ impl RenderContext {
     pub fn create_swapchain_info(&self, surface: vk::SurfaceKHR, size:PhysicalSize<u32>) -> Result<(vk::SwapchainCreateInfoKHR<'_>, vk::SurfaceFormatKHR, vk::Extent2D), RenderError> {
         unsafe {
             let caps = self.surface_loader.get_physical_device_surface_capabilities(self.physical_device, surface)
-                .map_err(|_|ContextError::InitShaderCompilerFailed)?;
+                .map_err(|_|SurfaceError::UnableToGetCapabilities)?;
 
             let formats = self.surface_loader.get_physical_device_surface_formats(self.physical_device, surface)
-                .map_err(|_|SurfaceError::MissingFormats)?;
+                .unwrap_or(Vec::new());
 
             let surface_format = formats
                 .iter()
@@ -120,7 +158,7 @@ impl RenderContext {
                 .clone();
 
             let present_mode = self.surface_loader.get_physical_device_surface_present_modes(self.physical_device, surface)
-                .map_err(|_|SurfaceError::MissingModes)?
+                .unwrap_or(Vec::new())
                 .iter()
                 .cloned()
                 .find(|&m| m == vk::PresentModeKHR::MAILBOX)

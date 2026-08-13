@@ -4,7 +4,10 @@ use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::Window,
 };
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    fmt
+};
 use crate::ApplicationInfo;
 use super::err::RenderError;
 
@@ -14,20 +17,31 @@ pub enum ContextError {
     MissingVulkanEntryPoint,
     DisplayHandleError(HandleError),
     WindowHandleError(HandleError),
-    MissingExtensionRequirements,
     FailedToInitInistance,
     InitSurfaceFailed,
-    PhysicalDeviceNotFound,
-    InitLogicDeviceFailed,
-    InitSwapChainFailed,
-    AquireImageFailed,
-    InitShaderCompilerFailed,
-    InitRenderPassFailed,
-    InitFrameBufferFailed(usize),
-    InitCommandPoolFailed,
-    InitCommandBufferFailed,
-    InitSemaphoreFailed,
-    InitFenceFailed
+    PhysicalDeviceNotFound
+}
+
+impl fmt::Display for ContextError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoVulkanLibrary => write!(f, "No Vulkan library found!"),
+            Self::MissingVulkanEntryPoint => write!(f, "Unable to load vulkan library!"),
+            Self::DisplayHandleError(handle_error) => match handle_error {
+                HandleError::NotSupported => write!(f, "Unable to load Display Handle!"),
+                HandleError::Unavailable => write!(f, "Display handle is unavailable!"),
+                _ => write!(f, "An unknown error occured trying to load a Display Handle!")
+            },
+            Self::WindowHandleError(handle_error) => match handle_error {
+                HandleError::NotSupported => write!(f, "Unable to load Window Handle!"),
+                HandleError::Unavailable => write!(f, "Window handle is unavailable!"),
+                _ => write!(f, "An unknown error occured trying to load a Window Handle!")
+            },
+            Self::FailedToInitInistance => write!(f, "Failed to load Vulkan Instance!"),
+            Self::InitSurfaceFailed => write!(f, "Faild to initalize Surface!"),
+            Self::PhysicalDeviceNotFound => write!(f, "No compatable Physical Device is available!"),
+        }
+    }
 }
 
 
@@ -37,6 +51,19 @@ pub struct RenderContext {
     pub(super) physical_device: vk::PhysicalDevice,
     pub(super) instance: ash::Instance,
     pub(super) entry: ash::Entry,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for RenderContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RenderContext")
+            .field("queue_family_index", &self.queue_family_index)
+            .field("surface_loader", &(&self.surface_loader as *const khr::surface::Instance))
+            .field("physical_device", &self.physical_device)
+            .field("instance", &(&self.instance as *const ash::Instance))
+            .field("entry", &(&self.entry as *const ash::Entry))
+            .finish()
+    }
 }
 
 impl RenderContext {
@@ -53,8 +80,8 @@ impl RenderContext {
             .as_raw();
 
         let mut extensions = ash_window::enumerate_required_extensions(display_handle)
-            .map_err(|_|ContextError::MissingExtensionRequirements)?
-            .to_vec();
+            .map(|slice|slice.to_vec())
+            .unwrap_or(Vec::new());
 
         //TODO: check for any required extensions needed by later code?
         extensions.push(khr::surface::NAME.as_ptr());

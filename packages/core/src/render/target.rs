@@ -3,6 +3,7 @@ use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::Window,
 };
+use core::fmt;
 use std::{
     sync::Arc,
     rc::Rc, 
@@ -10,10 +11,12 @@ use std::{
 };
 use crate::{
     render::{
+        Device,
         ctx::RenderContext,
         err::{
             ContextError,
-            RenderError
+            RenderError,
+            SurfaceError
         },
         pipeline::Pipeline,
         swapchain::Swapchain,
@@ -21,30 +24,59 @@ use crate::{
     }
 };
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum RenderTargetError {
+    InitLogicDeviceFailed,
     FailedToAquireNextImage,
     WaitForFencesFailed,
     ResetFencesFailed,
-    MissingMemoryType,
-    FailedToInitBuffer,
-    FailedToInitBufferMemory,
-    FailedToBindBufferToMemory,
-    FailedToWriteToDeviceMemory,
     ResetCommandBufferFailed,
     BeginCommandBufferFailed,
     EndCommandBufferFailed,
     SubmitToQueueFailed,
     SwapchainNeedsRecreation,
-    GraphicPresentationFailed
+    GraphicPresentationFailed,
+    InitRenderPassFailed,
+    InitShaderCompilerFailed,
+    InitFrameBufferFailed(usize),
+    InitSemaphoreFailed,
+    InitFenceFailed,
+    InitCommandPoolFailed,
+    InitCommandBufferFailed
 }
 
 #[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub(crate) struct DeviceContext {
     pub(crate) inner: Rc<RenderContext>,
-    pub(crate) device: Rc<ash::Device>
+    pub(crate) device: Device
 }
 
+impl fmt::Display for RenderTargetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InitLogicDeviceFailed => write!(f, "Failed to Inialize Logic Device!"),
+            Self::FailedToAquireNextImage => write!(f, "Unable to aquaire next RenderImage!"),
+            Self::WaitForFencesFailed => write!(f, "Failed to wait for Fences!"),
+            Self::ResetFencesFailed => write!(f, "Failed to reset Fences!"),
+            Self::ResetCommandBufferFailed => write!(f, "Failed to reset CommandBuffer!"),
+            Self::BeginCommandBufferFailed => write!(f, "Failed to start CommandBuffer!"),
+            Self::EndCommandBufferFailed => write!(f, "Failed to end CommandBuffer!"),
+            Self::SubmitToQueueFailed => write!(f, "Unable to Submit to Queue!"),
+            Self::SwapchainNeedsRecreation => write!(f, "Need to recreate the Swapchain!"),
+            Self::GraphicPresentationFailed => write!(f, "Unable to present graphics!"),
+            Self::InitRenderPassFailed => write!(f, "Failed to Inialize RenderPass!"),
+            Self::InitShaderCompilerFailed => write!(f, "Failed to Initalize the Shader Compiler!"),
+            Self::InitFrameBufferFailed(index) => write!(f, "Failed to Initalize FrameBuffer({})", index),
+            Self::InitSemaphoreFailed => write!(f, "Failed to Initalize Semaphore!"),
+            Self::InitFenceFailed => write!(f, "Failed to Inialize Fence!"),
+            Self::InitCommandPoolFailed => write!(f, "Failed to Initalize CommandPool!"),
+            Self::InitCommandBufferFailed => write!(f, "Failed to Initalize CommandBuffer!")
+        }
+    }
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct RenderTarget {
      _shader_compiler: shaderc::Compiler,
     current_frame: usize,
@@ -60,7 +92,7 @@ pub struct RenderTarget {
     swapchain: Swapchain,
     surface: vk::SurfaceKHR,
     queue: vk::Queue,
-    device: Rc<ash::Device>,
+    device: Device,
     ctx: Rc<RenderContext>,
     buffer_data: GpuBatchData
 }
@@ -282,7 +314,7 @@ impl RenderContext {
                 .as_raw();
 
             let surface = ash_window::create_surface(&self.entry, &self.instance, display_handle, window_handle, None)
-                .map_err(|_|ContextError::InitSurfaceFailed)?;
+                .map_err(|_|SurfaceError::InitFailed)?;
 
             let queue_priorities = [1.0f32];
             let queue_info = [vk::DeviceQueueCreateInfo::default()
@@ -295,9 +327,9 @@ impl RenderContext {
                 .queue_create_infos(&queue_info)
                 .enabled_extension_names(&device_exts);
 
-            let device = Rc::new(
+            let device = Device::new(
                 self.instance.create_device(self.physical_device, &device_create_info, None)
-                    .map_err(|_|ContextError::InitLogicDeviceFailed)?
+                    .map_err(|_|RenderTargetError::InitLogicDeviceFailed)?
             );
             let queue = device.get_device_queue(self.queue_family_index, 0);      
 
@@ -348,11 +380,11 @@ impl RenderContext {
                 .dependencies(&dependencies);
 
             let render_pass = device.create_render_pass(&rp_info, None)
-                .map_err(|_|ContextError::InitRenderPassFailed)?;
+                .map_err(|_|RenderTargetError::InitRenderPassFailed)?;
 
 
             let shader_compiler = shaderc::Compiler::new()
-                .map_err(|_|ContextError::InitShaderCompilerFailed)?;
+                .map_err(|_|RenderTargetError::InitShaderCompilerFailed)?;
 
             let pipelines = Pipeline::new_group(&device, render_pass, swapchain.extent, &shader_compiler)?;
 
@@ -370,7 +402,7 @@ impl RenderContext {
 
                 framebuffers.push(
                     device.create_framebuffer(&fb_info, None)
-                        .map_err(|_|ContextError::InitFrameBufferFailed(i))?
+                        .map_err(|_|RenderTargetError::InitFrameBufferFailed(i))?
                 );
             }
 
@@ -378,7 +410,7 @@ impl RenderContext {
             let command_pool = device.create_command_pool(
                 &vk::CommandPoolCreateInfo::default().queue_family_index(self.queue_family_index),
                 None
-            ).map_err(|_|ContextError::InitCommandPoolFailed)?;
+            ).map_err(|_|RenderTargetError::InitCommandPoolFailed)?;
 
             let alloc_info = vk::CommandBufferAllocateInfo::default()
                     .command_pool(command_pool)
@@ -386,7 +418,7 @@ impl RenderContext {
                     .command_buffer_count(max_frames_in_flight as u32);
 
             let command_buffers = device.allocate_command_buffers(&alloc_info)
-                .map_err(|_|ContextError::InitCommandBufferFailed)?;
+                .map_err(|_|RenderTargetError::InitCommandBufferFailed)?;
 
             // sync objects
             let (image_available_semaphores, render_finished_semaphores, in_flight_fences) =
@@ -429,11 +461,11 @@ unsafe fn create_sync_objects(device: &ash::Device, max_frames_in_flight: usize)
 
     for _ in 0..max_frames_in_flight {
         let image_available = device.create_semaphore(&semaphore_info, None)
-            .map_err(|_|ContextError::InitSemaphoreFailed)?;
+            .map_err(|_|RenderTargetError::InitSemaphoreFailed)?;
         let render_finished = device.create_semaphore(&semaphore_info, None)
-            .map_err(|_|ContextError::InitSemaphoreFailed)?;
+            .map_err(|_|RenderTargetError::InitSemaphoreFailed)?;
         let fence = device.create_fence(&fence_info, None)
-            .map_err(|_|ContextError::InitFenceFailed)?;
+            .map_err(|_|RenderTargetError::InitFenceFailed)?;
 
         image_available_semaphores.push(image_available);
         render_finished_semaphores.push(render_finished);

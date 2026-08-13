@@ -1,7 +1,8 @@
 use crate::render::vertex::Size;
 use ash::vk;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Position {
     Coordinate(i32, i32),
     Reference(f32, f32)
@@ -58,7 +59,8 @@ impl Position {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct VertexCordinate {
     pub x: f32,
     pub y: f32

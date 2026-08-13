@@ -3,12 +3,26 @@ use shaderc::{
     Error as ShadercError,
     ShaderKind
 };
-use super::err::RenderError;
+use std::fmt;
+use super::{
+    Device,
+    err::RenderError
+};
 
-#[derive(Debug)]
+
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ShaderError {
     ShadercError(ShadercError),
     CompileFailed
+}
+
+impl fmt::Display for ShaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ShadercError(e) => e.fmt(f),
+            Self::CompileFailed => write!(f, "Failed to Compile Shader!")
+        }
+    }
 }
 
 const VERTEX_SRC:&'static str = r#"
@@ -31,13 +45,14 @@ const FRAGMENT_SRC:&'static str = r#"
     }
 "#;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 struct ShaderPart {
     raw_shader: Vec<u32>,
     module: vk::ShaderModule,
 }
 
 impl ShaderPart {
-    fn new(device: &ash::Device, compiler:&shaderc::Compiler, src:&str, kind: ShaderKind, name:&str) ->Result<Self, RenderError> {
+    fn new(device: &Device, compiler:&shaderc::Compiler, src:&str, kind: ShaderKind, name:&str) ->Result<Self, RenderError> {
         let compile_options = shaderc::CompileOptions::new().unwrap();
         let raw_shader = compiler
             .compile_into_spirv(src, kind, name, "main", Some(&compile_options))
@@ -61,14 +76,15 @@ impl ShaderPart {
     }
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Shader<'a> {
     vertex: ShaderPart,
     fragment: ShaderPart,
-    device:&'a ash::Device
+    device:&'a Device
 }
 
 impl<'a> Shader<'a> {
-    pub fn new(device: &'a ash::Device, compiler: &shaderc::Compiler) -> Result<Self, RenderError> {
+    pub fn new(device: &'a Device, compiler: &shaderc::Compiler) -> Result<Self, RenderError> {
         Ok(Self {
             vertex:   ShaderPart::new(device, compiler, VERTEX_SRC,   ShaderKind::Vertex,   "vertex.glsl")?,
             fragment: ShaderPart::new(device, compiler, FRAGMENT_SRC, ShaderKind::Fragment, "fragment.glsl")?,

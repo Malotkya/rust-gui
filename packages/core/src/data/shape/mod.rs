@@ -4,6 +4,7 @@ use crate::{
 };
 use super::{Color, Position};
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Triangle {
     pub color: Color,
     pub points: [Position; 3]
@@ -25,6 +26,7 @@ impl VertexShape for Triangle {
     }
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Rectangle {
     pub color: Color,
     pub pos: Position,
@@ -56,6 +58,7 @@ impl VertexShape for Rectangle {
 
 const CIRCLE_SEGMENTS:usize = 50;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Circle {
     pub color: Color,
     pub pos: Position,

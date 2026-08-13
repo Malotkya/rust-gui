@@ -38,6 +38,8 @@ impl ApiVersion for &str {
     }
 }
 
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ApplicationInfo<'a> {
     pub name:&'a CStr,
     pub api_version: u32,

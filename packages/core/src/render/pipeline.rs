@@ -1,33 +1,59 @@
 use ash::vk;
 use super::{
+    Device,
     err::RenderError,
     shader::Shader,
     VertexData
 };
 use std::{
-    ops::Deref,
-    rc::Rc
+    fmt,
+    ops::Deref
 };
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PipelineError {
     InitPiplineLayoutFailed,
     InitPipelineFailed(PipelineType),
     InitShaderCompilerFailed,
 }
 
+impl fmt::Display for PipelineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InitPiplineLayoutFailed => write!(f, "Failed to initalize PipelineLayout!"),
+            Self::InitShaderCompilerFailed => write!(f, "Failed to initalize Shader Compiler!"),
+            Self::InitPipelineFailed(topology) => write!(f, "Failed to initalize {} Pipeline!",
+                match topology {
+                    &PipelineType::POINT_LIST => "point list".to_string(),
+                    &PipelineType::LINE_LIST => "line list".to_string(),
+                    &PipelineType::LINE_STRIP => "line strip".to_string(),
+                    &PipelineType::TRIANGLE_LIST => "triangle list".to_string(),
+                    &PipelineType::TRIANGLE_STRIP => "traingle strip".to_string(),
+                    &PipelineType::TRIANGLE_FAN => "traingle fan".to_string(),
+                    &PipelineType::LINE_LIST_WITH_ADJACENCY => "line list with adjacency".to_string(),
+                    &PipelineType::LINE_STRIP_WITH_ADJACENCY => "line strip with adjacency".to_string(),
+                    &PipelineType::TRIANGLE_LIST_WITH_ADJACENCY => "triangle list with adjacency".to_string(),
+                    &PipelineType::TRIANGLE_STRIP_WITH_ADJACENCY => "traingle strip with adjacency".to_string(),
+                    &n => format!("unknown({})", n.as_raw())
+                }
+            )
+        }
+    }
+}
+
 pub type PipelineType = vk::PrimitiveTopology;
 
 #[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Pipeline {
     layout: vk::PipelineLayout,
     inner: vk::Pipeline,
-    device: Rc<ash::Device>,
+    device: Device,
     _type: PipelineType
 }
 
 impl Pipeline {
-    pub fn new_group(device: &Rc<ash::Device>, render_pass: vk::RenderPass, extent: vk::Extent2D, compiler: &shaderc::Compiler) -> Result<Vec<Self>, RenderError> {
+    pub fn new_group(device: &Device, render_pass: vk::RenderPass, extent: vk::Extent2D, compiler: &shaderc::Compiler) -> Result<Vec<Self>, RenderError> {
         let shader = Shader::new(device, compiler)?;
 
         let shader_stages = shader.stages();

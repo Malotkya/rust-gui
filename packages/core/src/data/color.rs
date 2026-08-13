@@ -1,7 +1,8 @@
 use ash::vk;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Color {
     pub red: u8,
     pub green: u8,
