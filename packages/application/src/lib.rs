@@ -22,6 +22,7 @@ use std::{
 
 pub mod event;
 use event::*;
+pub mod node;
 mod window;
 use window::RenderWindow;
 
