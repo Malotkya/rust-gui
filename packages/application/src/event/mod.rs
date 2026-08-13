@@ -1,17 +1,14 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::panic::{RefUnwindSafe, UnwindSafe};
-use std::sync::{
-    atomic::{AtomicUsize, Ordering}
+use std::{
+    any::Any,
+    panic::{RefUnwindSafe, UnwindSafe},
+    sync::atomic::{AtomicUsize, Ordering},
+    fmt
 };
-use std::fmt;
 
 mod target;
 pub use target::*;
 mod types;
 pub use types::*;
-mod window;
-pub(crate) use window::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BubbleEventState {
@@ -26,6 +23,25 @@ pub struct Event {
     detail: Box<dyn Any>,
     bubbles: BubbleEventState,
     actionable: bool
+}
+
+#[derive(Debug)]
+pub struct EventData<T: 'static> {
+    pub type_name: String,
+    pub detail: T,
+    pub bubbles: BubbleEventState,
+    pub actionable: bool
+}
+
+impl<T: 'static> Into<Event> for EventData<T> {
+    fn into(self) -> Event {
+        let EventData {type_name, detail, bubbles, actionable}
+            = self;
+        Event {
+            type_name, bubbles, actionable,
+            detail: Box::new(detail)
+        }
+    }
 }
 
 impl fmt::Display for Event {
@@ -48,12 +64,13 @@ impl Event {
         }
     }
 
-    pub fn get_actionable(&self) -> Option<WinitEvent> {
+    pub(crate) fn get_actionable<T:TryFrom<Event>>(self) -> Result<Option<T>, T::Error> {
         if !self.actionable {
-            return None;
+            return Ok(None);
         }
 
-        todo!()
+        TryInto::<T>::try_into(self)
+            .map(|e|Some(e))
     }
 
     #[inline]
@@ -69,6 +86,21 @@ impl Event {
     #[inline]
     pub fn detail_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.detail.downcast_mut()
+    }
+
+    #[inline]
+    pub fn deconstruct<T: 'static>(self) -> Result<EventData<T>, Event> {
+        let Event { type_name, detail, bubbles, actionable } = self;
+        match detail.downcast::<T>() {
+            Ok(value) => Ok(EventData {
+                type_name, bubbles, actionable,
+                detail: *value
+            }),
+            Err(any) => Err(Event {
+                type_name, bubbles, actionable,
+                detail: any
+            })
+        }
     }
 
     #[inline]

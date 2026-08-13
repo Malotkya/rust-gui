@@ -192,29 +192,26 @@ impl ParentEventTarget for EventTargetCore {
 #[derive(Debug)]
 pub(crate) struct WindowEventTarget{
     core: EventTargetCore,
-    mouse: EventHistory,
-    touch: EventHistory
+    history: EventHistory
 }
 
 impl WindowEventTarget {
     pub fn new() -> Self {
         Self{
             core: EventTargetInner::new(),
-            mouse: EventHistory::new(),
-            touch: EventHistory::new()
+            history: EventHistory::new()
         }
     }
 
     pub fn new_parrent(parrent:&impl ParentEventTarget) -> Self {
         Self{
             core: EventTargetInner::new_parrent(parrent.inner_ref()),
-            mouse: EventHistory::new(),
-            touch: EventHistory::new()
+            history: EventHistory::new()
         }
     }
 
-    pub(crate) fn handle_winit_event(&mut self, event:WinitEvent) -> ApplicationEvent {
-        ApplicationEvent::from_winit_event(event, &mut self.mouse, &mut self.touch)
+    pub(crate) fn handle_external_event(&mut self, event:impl ExternalEvent) -> EventResponse {
+        EventResponse::from_extenral_event(event, &mut self.history)
     }
 }
 
