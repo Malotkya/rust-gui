@@ -1,33 +1,34 @@
+#![allow(dead_code)]
+
+use rust_gui_core::data::{Color, Position};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, ControlFlow},
     window::{WindowAttributes, WindowId}
 };
 use rust_gui_core::{
     ApiVersion, ApplicationInfo,
-    render::RenderContext
+    render::{RenderContext, Size},
+    data::shape::Rectangle
 };
 use std::{
-    collections::LinkedList,
+    collections::HashMap,
     ffi::CStr,
     rc::Rc,
 };
 
 
-mod event;
-pub use event::*;
+pub mod event;
+use event::*;
 mod window;
 use window::RenderWindow;
-
-const DEFAULT_APP_NAME:&'static CStr = c"";
-
 
 pub struct Application {
     info:ApplicationInfo<'static>,
     ctx: Option<Rc<RenderContext>>,
-    list: LinkedList<RenderWindow>,
-    listeners: GlobalEventTarget
+    list: HashMap<WindowId, RenderWindow>,
+    listeners: event::EventTargetCore
 }
 
 impl Application {
@@ -35,8 +36,8 @@ impl Application {
         Self {
             info: ApplicationInfo::default(),
             ctx: None,
-            list: LinkedList::new(),
-            listeners: GlobalEventTarget::new()
+            list: HashMap::new(),
+            listeners: event::EventTargetInner::new()
         }
     }
 
@@ -58,45 +59,77 @@ impl Application {
 
     pub fn run(&mut self) -> Result<(), EventLoopError>{
         let event_loop = EventLoop::new()?;
+
+        event_loop.set_control_flow(ControlFlow::Poll);
+
         event_loop.run_app(self)
     }
 
-    pub fn get_by_id(&self, id:WindowId) -> Option<&RenderWindow> {
-        for target in &self.list {
-            if target.id() == id {
-                return Some(target)
+    pub fn window(&self, id:&WindowId) -> Option<&RenderWindow> {
+        self.list.get(id)
+    }
+
+    pub fn window_mut(&mut self, id:&WindowId) -> Option<&mut RenderWindow> {
+        self.list.get_mut(id)
+    }
+
+    pub fn open_windows(&self) -> usize {
+        self.list.len()
+    }
+
+    pub fn handle_winit_event(&mut self, event:impl ExternalEvent, window_id:WindowId) {
+        let mut event = if let Some(window) = self.window_mut(&window_id) {
+            match window.handle_winit_event(event) {
+                Ok(close) => {
+                    if close && let Some(w) = self.list.remove(&window_id) {
+                        // Destroy && Drop window
+                        w.destory();
+                    }
+
+                    return;
+                },
+                Err(e) => e
             }
+        } else {
+            event.into_event(&mut EventHistory::new())
+        };
+
+        if let Err(msg) = self.dispatch_event(&mut event) {
+            panic!("{}", msg)
         }
 
-        None
-    }
+        if let Some(app_event) = event.get_actionable::<ApplicationEvent>().ok().flatten() {
+            /*match app_event {
+                
+            }*/
 
-    pub fn get_by_id_mut(&mut self, id:WindowId) -> Option<&mut RenderWindow> {
-        for target in &mut self.list {
-            if target.id() == id {
-                return Some(target)
-            }
+            println!("Application Handler: {:?}", app_event);
         }
+    }
+}
 
-        None
+impl event::EventTarget for Application {
+    fn dispatch_event(&self, event:&mut Event) -> Result<(), impl std::fmt::Display> {
+        self.listeners.dispatch_event(event)
     }
 
-    pub fn primary_window(&self) -> Option<&RenderWindow> {
-        self.list.iter().next()
+    fn add_event_listener(&mut self, type_name:&str, listener:EventListener) -> usize {
+        self.listeners.add_event_listener(type_name, listener)
     }
 
-    pub fn primary_window_mut(&mut self) -> Option<&mut RenderWindow> {
-        self.list.iter_mut().next()
+    fn add_event_listener_once(&mut self, type_name:&str, listener:EventListener) -> usize {
+        self.listeners.add_event_listener_once(type_name, listener)
     }
 
-    pub fn append_event_listener(&self, event_listener:GlobalEventListener) {
-        self.listeners.append_event_listener(event_listener);
+    fn remove_event_listener(&mut self, id:usize) -> Option<EventListener> {
+        self.listeners.remove_event_listener(id)
     }
+}
 
-    pub fn dispatch_event(&self, event:GlobalEvent) {
-        self.listeners.dispatch_event(event);
+impl event::ParentEventTarget for Application {
+    fn inner_ref(&self) -> EventTargetCore {
+        self.listeners.inner_ref()
     }
-
 }
 
 impl ApplicationHandler for Application {
@@ -108,23 +141,40 @@ impl ApplicationHandler for Application {
                 .unwrap();
 
             let ctx = RenderContext::new(&self.info, &window).unwrap();
+            let id = window.id();
+            let mut target = RenderWindow::from(window, &ctx, self).unwrap();
+
             self.ctx = Some(ctx);
+
+            target.draw(Rectangle{
+                color: Color::RED,
+                pos: Position::new_coordinate(10, 10),
+                size: Size{
+                    width: 50.0,
+                    height: 50.0
+                }
+            });
+            
+            target.request_redraw();
+            self.list.insert(id, target);
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id:WindowId, event:WinitEvent) {
-        if let Some(target) = self.get_by_id_mut(window_id) {
-            target.dispatch_event(event, Some(event_loop));
-        }
-        
-        if event == WinitEvent::CloseRequested {
+        self.handle_winit_event(event, window_id);
+        if self.open_windows() == 0 {
             event_loop.exit();
         }
     }
 
+    fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: winit::event::DeviceEvent){
+        
+    }
+
     fn exiting(&mut self, _:&ActiveEventLoop) {
-        if let Some(_ctx) = self.ctx.take() {
-            //ctx.destory();
+        let mut drain = self.list.drain();
+        while let Some((_, window)) = drain.next() {
+            window.destory();
         }
     }
 }
