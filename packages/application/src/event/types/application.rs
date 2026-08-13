@@ -3,18 +3,21 @@ use super::{
     super::{Event, EventData}
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq)]
 pub struct ActivationTokenData {
     pub serial: AsyncRequestSerial,
     pub token: ActivationToken
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq)]
 pub struct DeviceMotionData {
     pub axis: AxisId,
     pub value: f64
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ApplicationEvent {
     ActivationTokenDone(ActivationTokenData),
     PointerMotion(PhysicalPosition<f64>),

@@ -6,7 +6,7 @@ use std::{
     fmt::Display
 };
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub(crate) struct EventTargetInner {
     map: HashMap<String, Vec<EventHandler>>,
     parrent: Option<EventTargetCore>
@@ -189,7 +189,7 @@ impl ParentEventTarget for EventTargetCore {
     }
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub(crate) struct WindowEventTarget{
     core: EventTargetCore,
     history: EventHistory

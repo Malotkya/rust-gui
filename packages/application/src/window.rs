@@ -19,6 +19,7 @@ use std::{
     ops::Deref
 };
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct RenderWindow {
     inner: Arc<Window>,
     target: RenderTarget,

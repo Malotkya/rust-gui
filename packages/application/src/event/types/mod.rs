@@ -13,7 +13,7 @@ pub use external::*;
 mod window;
 pub use window::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub(crate) struct EventHistory(HashMap<DeviceId, (PhysicalPosition<f64>, Instant)>);
 
 impl EventHistory {
@@ -42,6 +42,7 @@ impl EventHistory {
     } 
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub(crate) enum EventResponse {
     ElementEvent(Event),
     WindowEvent(Event),

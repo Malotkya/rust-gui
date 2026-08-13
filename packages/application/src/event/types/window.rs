@@ -6,6 +6,7 @@ use super::{
     super::{Event, EventData}
 };
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum WindowEvent {
     SurfaceResized(PhysicalSize<u32>),
     Moved(PhysicalPosition<i32>),
@@ -21,14 +22,16 @@ pub enum WindowEvent {
     MouseWheel(ScrollData)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct TouchpadPressureEventData {
     pub device_id: DeviceId,
     pub pressure: f32,
     pub stage: i64
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct TouchData {
     pub device_id: DeviceId,
     pub phase: TouchPhase,
@@ -36,27 +39,31 @@ pub struct TouchData {
     pub force: Option<Force>
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq)]
 pub struct ScaleFactorChanged {
     pub scale_factor: f64,
     pub inner_size_writer: InnerSizeWriter
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct AxisMotionData {
     pub device_id: DeviceId,
     pub axis: AxisId,
     pub value: f64
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct GestureEventData<T> {
     pub device_id: DeviceId,
     pub delta: T,
     pub phase: TouchPhase
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub enum GestureEventType {
     Hold(GestureEventData<()>),
     Pinch(GestureEventData<f64>),

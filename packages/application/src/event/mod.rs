@@ -10,14 +10,15 @@ pub use target::*;
 mod types;
 pub use types::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BubbleEventState {
     Stop,
     Immediate,
     Continue
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Event {
     pub type_name: String,
     detail: Box<dyn Any>,
@@ -25,7 +26,16 @@ pub struct Event {
     actionable: bool
 }
 
-#[derive(Debug)]
+impl PartialEq for Event {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self as *const Self, other as *const Self)
+    }
+}
+
+impl Eq for Event {}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq)]
 pub struct EventData<T: 'static> {
     pub type_name: String,
     pub detail: T,
@@ -114,7 +124,7 @@ impl RefUnwindSafe for Event {}
 
 pub type EventListener = fn(&Event) -> ();
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 struct EventHandler {
     id: usize,
     listener: EventListener,

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![cfg_attr(debug_assertions, deny(missing_debug_implementations))]
 
 use rust_gui_core::data::{Color, Position};
 use winit::{
@@ -24,6 +25,7 @@ use event::*;
 mod window;
 use window::RenderWindow;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Application {
     info:ApplicationInfo<'static>,
     ctx: Option<Rc<RenderContext>>,
@@ -77,7 +79,7 @@ impl Application {
         self.list.len()
     }
 
-    pub fn handle_winit_event(&mut self, event:impl ExternalEvent, window_id:WindowId) {
+    pub(crate) fn handle_winit_event(&mut self, event:impl ExternalEvent, window_id:WindowId) {
         let mut event = if let Some(window) = self.window_mut(&window_id) {
             match window.handle_winit_event(event) {
                 Ok(close) => {
@@ -167,8 +169,8 @@ impl ApplicationHandler for Application {
         }
     }
 
-    fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: winit::event::DeviceEvent){
-        
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, device_id: DeviceId, event: winit::event::DeviceEvent){
+        println!("Device Event: {:?}\n{:?}", device_id, event)
     }
 
     fn exiting(&mut self, _:&ActiveEventLoop) {

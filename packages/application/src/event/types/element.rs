@@ -3,13 +3,15 @@ use super::{
     super::Event
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct MouseOverData {
     pub device_id: DeviceId,
     pub position: PhysicalPosition<f64>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq)]
 pub struct KeyboardData {
     pub keyboard_id: DeviceId,
     pub physical_key: PhysicalKey,
@@ -31,14 +33,16 @@ impl KeyboardData {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct MouseButtonData {
     pub button: MouseButton,
     pub position: PhysicalPosition<f64>,
     pub device_id: DeviceId
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct ScrollData {
     pub delta: MouseScrollDelta,
     pub phase: TouchPhase,
@@ -46,7 +50,8 @@ pub struct ScrollData {
     pub position: Option<PhysicalPosition<f64>>
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Copy, PartialEq)]
 pub struct TouchpadPressure {
     pub device_id: DeviceId,
     pub pressure: f32,
