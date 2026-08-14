@@ -1,178 +1,84 @@
 use std::{
-    collections::{
-        HashMap, LinkedList
-    },
-    fmt
+    fmt,
+    ops::{Deref, DerefMut},
 };
 use super::*;
 
 mod attribute;
 pub use attribute::*;
+mod attribute_map;
+pub use attribute_map::*;
+mod item;
+pub use item::*;
+mod query;
+pub use query::*;
 
-#[derive(Clone)]
-pub(crate) struct ElementData {
-    tage_name:String,
-    parrent: Option<NodeRef>,
-    attributes: HashMap<String, Attribute>,
-    children: LinkedList<NodeRef>,
+pub enum AdjacentWhere {
+    BeforeBegin,
+    AfterBegin,
+    BeforeEnd,
+    AfterEnd
 }
 
-impl ElementData {
-    fn children_content(&self) -> Vec<String> {
-        self.children()
-            .map(|n|n.content())
-            .collect::<Vec<_>>()
-    }
-
-    fn index_of(&self, node:&impl Node) -> Option<usize> {
-        self.children()
-            .enumerate()
-            .find_map(|(i, n)| n.as_ref().eq(&node.as_ref()).then_some(i))
-    }
+pub struct BoundingBox {
+    top: u32,
+    bottom: u32
 }
 
-impl fmt::Display for ElementData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut dbg = f.debug_struct(&self.tage_name);
-        for (key, value) in &self.attributes {
-            dbg.field(key, &value.to_string());
-        }
+pub trait Element: Node {
+    fn attributes(&self) -> AttributeIter<'_>;
+    fn attribute_names(&self) -> Vec<&String>;
+    fn has_attribute(&self, name:&str) -> bool;
+    fn set_attribute<N:ToString, V:Into<Attribute>>(&mut self, name:N, value:V);
+    fn get_attribute(&self, name:&str) -> Option<&Attribute>;
+    fn toggle_attribute<N:ToString>(&mut self, name:N, force:Option<bool>);
+    
+    fn get_class_name(&self) -> String;
+    fn set_class_name<T:ToString>(&mut self, value:T);
+    fn class_list(&self) -> Vec<String>;
+    fn get_id(&self) -> String;
+    fn set_id<T:ToString>(&mut self, value:T);
+    fn tag_name(&self) -> &str;
 
-        dbg.field("children", &self.children);
-        dbg.finish()
-    }
+    fn children(&self) -> NodeList<ElementItem>;
+    fn first_child(&self) -> Option<ElementItem>;
+    fn last_child(&self) -> Option<ElementItem>;
+
+    fn client_height(&self) -> u32;
+    fn client_left(&self) -> u32;
+    fn client_top(&self) -> u32;
+    fn client_width(&self) -> u32;
+
+    fn current_zoom(&self) -> f64;
+    fn scroll_height(&self) -> u32;
+    fn scroll_left(&self) -> u32;
+    fn scroll_top(&self) -> u32;
+    fn scroll_bottom(&self) -> u32;
+
+    fn parrent(&self) -> Option<ElementItem>;
+    fn after<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>;
+    fn before<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>;
+    fn append<E: Element>(&mut self, node:&mut E);
+    fn prepend<E:Element>(&mut self, node:&mut E);
+    fn remove(&mut self);
+    fn replace_with<N>(&mut self, node:&mut N)
+        where N: DerefMut<Target = NodeItem>;
+
+    fn insert_adjacent_element<E:Element>(&mut self, adjacent_where:AdjacentWhere, element:E);
+    fn insert_adjacent_text<S:ToString>(&mut self, adjacent_where:AdjacentWhere, element:S);
+
+    fn bounding_box(&self) -> BoundingBox;
+    fn elements_by_class_name<T:ToString>(&self, class_name:T);
+    fn elements_by_tag_name<T:ToString>(&self, tag_name:T);
+    fn elements_by_id<T:ToString>(&self, id:T);
+
+    fn matches(&self, query_string:&Query) -> bool;
+    fn query_selector(&self, query_string:&Query) -> Option<ElementItem>;
+    fn query_selector_all(&self, query_string:&Query) -> QueryIterator<'_>;
+
+    fn scroll_into_view(&mut self);
+    fn scroll_by(&mut self, delta:f64);
 }
 
-#[cfg(debug_assertions)]
-impl fmt::Debug for ElementData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-}
-
-impl Node for ElementData {
-    fn node_type(&self) -> u32 {
-        0
-    }
-
-    fn tag_name(&self) -> &str {
-        &self.tage_name
-    }
-
-    fn children(&self) -> NodeIterator<'_> {
-        self.children.iter().into()
-    }
-
-    fn content(&self) -> String {
-        self.children_content()
-            .iter()
-            .map(|c|c.trim())
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    fn stringify(&self) -> String {
-        format!("{}", self)
-    }
-
-    fn parrent(&self) -> Option<&NodeRef> {
-        self.parrent.as_ref()
-    }
-
-    fn contains(&self, other:&impl Node) -> bool {
-        if self.eq(&other.as_ref()) {
-            return true;
-        }
-
-        for child in &self.children {
-            if child.contains(other) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    fn append(&mut self, other:&impl Node) {
-        let mut other = other.as_ref();
-        other.set_parrent(self);
-        self.children.push_back(other);
-    }
-
-    fn remove(&mut self, other:&impl Node) -> Result<(), NodeError> {
-        let mut other = other.as_ref();
-        if self.remove_child(&other) {
-            other.remove_parrent();
-            Ok(())
-        } else {
-            Err(
-                NodeError::NotDesendent(self.as_ptr(), NodeCmp::as_ptr(&other))
-            )
-        }
-    }
-
-    fn children_mut(&mut self) -> NodeIteratorMut<'_> {
-        self.children.iter_mut().into()
-    }
-
-    fn set_content<C:ToString>(&mut self, value:C) {
-        let mut clear = -1;
-        for (index, child) in self.children_mut().enumerate() {
-            if child.node_type() == TextData::VALUE {
-                child.set_content(value);
-                clear = index as i32;
-                break;
-            }
-        }
-
-        if clear >= 0 {
-            let mut split = self.children.split_off(clear as usize + 1);
-            split = split.into_iter()
-                .filter(|n|n.node_type() == TextData::VALUE)
-                .collect();
-
-            self.children.append(&mut split);
-        } else {
-            self.children.push_back(
-                todo!("New Text Node!")
-            )
-        }
-    }
-
-    fn as_ref(&self) -> NodeRef {
-        todo!("Get Reference!")
-    }
-}
-
-impl NodeMut for ElementData {
-    fn set_parrent(&mut self, value:&impl NodeMut) {
-        let this = self.clone();
-        if let Some(mut parrent) = this.parrent {
-            parrent.remove_child(self);
-        }
-        
-        self.parrent = Some(value.as_ref())
-    }
-
-    fn remove_parrent(&mut self) {
-        let this = self.clone();
-        if let Some(mut parrent) = this.parrent {
-            parrent.remove_child(self);
-        }
-
-        self.parrent = None;
-    }
-
-    fn remove_child(&mut self, node:&impl NodeMut) -> bool {
-        if let Some(index) = self.index_of(node) {
-            let mut split = self.children.split_off(index);
-            split.pop_front();
-            self.children.append(&mut split);
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl NodeCmp for ElementData {}
