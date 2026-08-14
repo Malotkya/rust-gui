@@ -1,103 +1,146 @@
-use std::{
-    cell::{Ref, RefCell}, ops::{Deref, DerefMut}, rc::{Rc, Weak}
-};
+use std::fmt;
+use std::ops::{Deref, DerefMut};
 
-pub use element::Attribute;
-
-mod core;
-pub use core::*;
-mod document;
-pub(crate) use document::DocumentData;
 mod element;
-pub(crate) use element::ElementData;
-mod iterator;
-pub use iterator::*;
-mod text;
-pub(crate) use text::TextData;
+pub use element::*;
+mod document;
+pub use document::*;
+mod inner;
+pub(crate) use inner::*;
+mod item;
+pub use item::*;
+mod list;
+pub use list::*;
 
-#[derive(Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
-pub struct NodeRef(Rc<RefCell<NodeDataType>>);
+pub enum NodeError {
+    NotDesendent(NodeItem, NodeItem),
+    CannotAppendToTextNode,
+    CannotSetAttributeOfTextNode,
+    NodeRefIsInvalid
+}
 
-impl Deref for NodeRef {
-    type Target = NodeDataType;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe{ &*self.0.as_ptr() }
+impl fmt::Display for NodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotDesendent(parrent, child) 
+                => write!(f, "Child NodeItem is not a desendent!\nParrent: {}\nChild: {}", parrent, child),
+            Self::CannotAppendToTextNode
+                => write!(f, "Unable to append child to TextNodeItem!"),
+            Self::CannotSetAttributeOfTextNode
+                => write!(f, "Unable to set attribute of TextNodeItem!"),
+            Self::NodeRefIsInvalid
+                => write!(f, "Node has been dropped, and NodeRef has been invalidated!")
+        }
     }
 }
 
-impl DerefMut for NodeRef {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.0.as_ptr() }
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum NodeType {
+    Element,
+    Text,
+    Document,
+    Fragment
 }
 
-impl Node for NodeRef {
-    fn node_type(&self) -> u32 {
+pub trait Node {
+    fn node_type(&self) -> NodeType;
+    fn tag_name(&self) -> &str;
+
+    fn child_nodes(&self) -> &NodeList<NodeItem>;
+    //fn child_nodes_mut(&mut self) -> &mut NodeList;
+
+    fn get_content(&self) -> String;
+    fn set_content<T:ToString>(&mut self, content:T);
+
+    fn parrent_node(&self) -> Option<NodeItem>;
+    fn contains<T:PartialEq<NodeItem>>(&self, node:&T) -> bool;
+
+    fn append_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>;
+    fn prepend_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>;
+    fn insert_before<N, R>(&mut self, new_node:&mut N, ref_node:&R) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>,
+              R: Deref<Target = NodeItem>;
+
+    fn remove_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>;
+
+    fn node(&self) -> NodeItem;
+}
+
+impl<T:DerefMut<Target = NodeItem>> Node for T {
+    #[inline]
+    fn node_type(&self) -> NodeType {
         self.deref().node_type()
     }
 
-    fn tag_name<'a>(&'a self) -> &'a str {
+    #[inline]
+    fn tag_name(&self) -> &str {
         self.deref().tag_name()
     }
-    fn children(&self) -> NodeIterator<'_> {
-        self.deref().children()
+
+    #[inline]
+    fn child_nodes(&self) -> &NodeList<NodeItem> {
+        self.deref()
+            .child_nodes()
     }
 
-    fn content(&self) -> String {
-        self.deref().content()
+    #[inline]
+    fn get_content(&self) -> String {
+        self.deref().get_content()
     }
 
-    fn stringify(&self) -> String {
-        self.deref().stringify()
+    #[inline]
+    fn set_content<S:ToString>(&mut self, content:S) {
+        self.deref_mut()
+            .set_content(content);
     }
 
-    fn parrent(&self) -> Option<&NodeRef> {
-        self.deref().parrent()
+    #[inline]
+    fn parrent_node(&self) -> Option<NodeItem> {
+        self.deref().parrent_node()
     }
 
-    fn contains(&self, other:&impl Node) -> bool {
-        self.deref().contains(other)
+    #[inline]
+    fn contains<N:PartialEq<NodeItem>>(&self, node:&N) -> bool {
+        self.deref().contains(node)
     }
 
-    fn append(&mut self, value:&impl Node) {
-        self.deref_mut().append(value)
+    #[inline]
+    fn append_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>
+    {
+        self.deref_mut().append_node(node)
     }
 
-    fn remove(&mut self, value:&impl Node) -> Result<(), NodeError> {
-        self.deref_mut().remove(value)
+    #[inline]
+    fn prepend_node<N>(&mut self, node:&mut N) -> Result<(), NodeError> 
+        where N: DerefMut<Target = NodeItem>
+    {
+        self.deref_mut().prepend_node(node)
     }
 
-    fn children_mut(&mut self) -> NodeIteratorMut<'_> {
-        self.deref_mut().children_mut()
+    #[inline]
+    fn insert_before<N, R>(&mut self, new_node:&mut N, ref_node:&R) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>,
+              R: Deref<Target = NodeItem>
+    {
+        self.deref_mut()
+            .insert_before(new_node, ref_node)
     }
 
-    fn set_content<C:ToString>(&mut self, value:C) {
-        self.deref_mut().set_content(value)
+    #[inline]
+    fn remove_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
+        where N: DerefMut<Target = NodeItem>
+    {
+        self.deref_mut().remove_node(node)
     }
 
-    fn as_ref(&self) -> NodeRef {
-        self.clone()
+    #[inline]
+    fn node(&self) -> NodeItem {
+        self.deref().node()
     }
 }
-
-impl NodeMut for NodeRef {
-    fn set_parrent(&mut self, value:&impl NodeMut) {
-        self.deref_mut().set_parrent(value);
-    }
-
-    fn remove_parrent(&mut self) {
-        self.deref_mut().remove_parrent();
-    }
-
-    fn remove_child(&mut self, child:&impl NodeMut) -> bool {
-        self.deref_mut().remove_child(child)
-    }
-}
-
-impl NodeCmp for NodeRef {}
-
-
-
-
