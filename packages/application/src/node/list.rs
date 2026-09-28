@@ -8,7 +8,7 @@ pub(super) const EMPTY:NodeList<NodeItem> = NodeList(None);
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
-pub struct NodeList<N: Node>(Option<LinkedList<N>>);
+pub struct NodeList<N: Node>(pub(crate) Option<LinkedList<N>>);
 
 impl<N:Node, I:Iterator<Item = N>> From<I> for NodeList<N> {
     fn from(value: I) -> Self {
@@ -68,6 +68,26 @@ impl<N:Node> NodeList<N> {
             let mut split = inner.split_off(index);
             split.push_front(new_node.into());
             inner.append(&mut split);
+
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn insert_after<I: Into<N>, R:PartialEq<N>>(&mut self, new_node:I, ref_node:&R) -> bool {
+        let inner = self.0.as_mut().unwrap();
+        
+        if let Some(index) = Self::find_node(&inner, ref_node) {
+            if index == 0 {
+                inner.push_front(new_node.into());
+            } else if index >= inner.len()-1 {
+                inner.push_back(new_node.into());
+            } else {
+                let mut split = inner.split_off(index-1);
+                split.push_front(new_node.into());
+                inner.append(&mut split);
+            }
 
             true
         } else {

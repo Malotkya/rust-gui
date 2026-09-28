@@ -50,7 +50,7 @@ impl Eq for NodeInnerType {}
 #[derive(Clone)]
 pub(crate) struct NodeInner {
     data:NodeInnerType,
-    parrent: Option<NodeRef>
+    parrent: Option<NodeItemRef>
 }
 
 impl fmt::Display for NodeInner {
@@ -128,7 +128,7 @@ impl NodeInner {
 
     pub fn parrent(&self) -> Option<NodeItem> {
         self.parrent.as_ref()
-            .map(|p|p.node())
+            .map(|p|NodeRef::to_owned(p))
             .flatten()
     }
 
@@ -172,7 +172,7 @@ impl NodeInner {
         }
     }
 
-    pub fn insert(&mut self, new_node:&NodeItem, ref_node:&NodeItem) -> Result<bool, NodeError>{
+    pub fn insert_before(&mut self, new_node:&NodeItem, ref_node:&NodeItem) -> Result<bool, NodeError>{
         match &mut self.data {
             NodeInnerType::Text(_) => Err(NodeError::CannotAppendToTextNode),
             NodeInnerType::Element { children, .. } => Ok(
@@ -182,6 +182,18 @@ impl NodeInner {
                 list.insert_before(new_node.clone(), ref_node)
             )
                 
+        }
+    }
+
+    pub fn insert_after(&mut self, new_node:&NodeItem, ref_node:&NodeItem) -> Result<bool, NodeError> {
+        match &mut self.data {
+            NodeInnerType::Text(_) => Err(NodeError::CannotAppendToTextNode),
+            NodeInnerType::Element {children, .. } => Ok(
+                children.insert_after(new_node.clone(), ref_node)
+            ),
+            NodeInnerType::Root(list) => Ok(
+                list.insert_after(new_node.clone(), ref_node)
+            )
         }
     }
 
@@ -195,10 +207,10 @@ impl NodeInner {
         }
     }
 
-    pub fn set_content(&mut self, value:String) {
+    pub fn set_content(&mut self, value:&str) {
         let children = match &mut self.data {
             NodeInnerType::Text(content) => {
-                *content = value;
+                *content = value.to_string();
                 return;
             },
             NodeInnerType::Element { children, .. } => children,
@@ -218,7 +230,7 @@ impl NodeInner {
         }
 
         children.insert_end(
-            NodeItem::new_text(value)
+            NodeItem::new_text(&value)
         )
     }
 
@@ -234,7 +246,7 @@ impl NodeInner {
         }
     }
 
-    pub(super) fn set_parrent(&mut self, node:&NodeItem) {
+    pub(crate) fn set_parrent(&mut self, node:&NodeItem) {
         if let Some(mut parrent) = self.parrent() {
             parrent.inner_mut().remove(self);
         }
@@ -267,6 +279,15 @@ impl NodeInner {
             NodeInnerType::Element { attributes, .. } => Some(
                 attributes
             )
+        }
+    }
+}
+
+impl Default for NodeInner {
+    fn default() -> Self {
+        Self {
+            data: NodeInnerType::Root(NodeList::new()),
+            parrent: None
         }
     }
 }

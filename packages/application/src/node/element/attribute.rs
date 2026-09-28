@@ -96,6 +96,100 @@ impl Attribute {
             Self::String(s) => fmt_helper(name, s)
         }
     }
+
+    pub(crate) fn eq_weak(&self, value:&str) -> bool {
+        self.to_string().to_ascii_lowercase()
+            .eq(&value.to_ascii_lowercase())
+    }
+
+    pub(crate) fn list_has(&self, value:&str) -> bool {
+        self.to_string().split_whitespace()
+            .find(|str|str.eq(&value))
+            .is_some()
+    }
+
+    pub(crate) fn list_has_weak(&self, value:&str) -> bool {
+        let value = value.to_ascii_lowercase();
+        self.to_string().split_whitespace()
+            .find(|str|str.to_ascii_lowercase()
+                .eq(&value))
+            .is_some()
+    }
+
+    pub(crate) fn starts_with(&self, value:&str) -> bool {
+        if let Some(index) = self.to_string().find(value) {
+            index == 0
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn starts_with_weak(&self, value:&str) -> bool {
+        if let Some(index) = self.to_string().to_ascii_lowercase()
+            .find(&value.to_ascii_lowercase())
+        {
+            index == 0
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn ends_with(&self, value:&str) -> bool {
+        let this = self.to_string();
+
+        if let Some(index) = this.find(value) {
+            index+value.len() == this.len()
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn ends_with_weak(&self, value:&str) -> bool {
+        let this = self.to_string()
+            .to_ascii_lowercase();
+
+        if let Some(index) = this.find(&value.to_ascii_lowercase()) {
+            index+value.len() == this.len()
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn includes(&self, value:&str) -> bool {
+        self.to_string()
+            .find(&value)
+            .is_some()
+    }
+
+    pub(crate) fn includes_weak(&self, value:&str) -> bool {
+        self.to_string()
+            .to_ascii_lowercase()
+            .find(&value.to_ascii_lowercase())
+            .is_some()
+    }
+
+    pub(crate) fn eq_or_prefix(&self, value:&str) -> bool {
+        if !self.eq(&value) {
+            self.starts_with(&(value.to_owned()+"-"))
+        } else {
+            true
+        }
+    }
+
+    pub(crate) fn eq_or_prefix_weak(&self, value:&str) -> bool {
+        let this = self.to_string().to_ascii_lowercase();
+        let value = value.to_ascii_lowercase();
+        
+        if !this.eq(&value) {
+            if let Some(index) = this.find(&(value+"-")) {
+                index == 0
+            } else {
+                false
+            }
+        } else {
+            true
+        }
+    }
 }
 
 fn fmt_helper(name:&str, value:&str) -> String {

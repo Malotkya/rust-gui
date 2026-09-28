@@ -1,8 +1,7 @@
 use std::fmt;
 use std::{
     cell::RefCell,
-    rc::{Rc, Weak},
-    ops::{Deref, DerefMut}
+    rc::{Rc, Weak}
 };
 use super::*;
 
@@ -60,7 +59,7 @@ impl NodeItem {
         unsafe{ &mut *self.0.as_ptr() }
     }
 
-    pub fn new_text<T:ToString>(text:T) -> Self {
+    pub fn new_text<T:ToString>(text:&T) -> Self {
         Self(Rc::new(
             RefCell::new(
                 NodeInner::new_text(text.to_string())
@@ -76,8 +75,8 @@ impl NodeItem {
         ))
     }
 
-    pub fn as_ref(&self) -> NodeRef {
-        NodeRef(
+    pub(crate) fn as_ref(&self) -> NodeItemRef {
+        NodeItemRef(
             Rc::downgrade(&self.0)
         )
     }
@@ -85,13 +84,21 @@ impl NodeItem {
 
 #[derive(Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
-pub struct NodeRef(Weak<RefCell<NodeInner>>);
+pub(crate) struct NodeItemRef(Weak<RefCell<NodeInner>>);
 
-impl NodeRef {
-    #[inline]
-    pub fn node(&self) -> Option<NodeItem> {
-        self.0.upgrade()
-            .map(|i|NodeItem(i))
+impl NodeRef for NodeItemRef{
+    type TargetNode = NodeItem;
+
+    fn to_owned(&self) -> Option<Self::TargetNode> {
+        self.0
+            .upgrade()
+            .map(|rc|NodeItem(rc))
+    }
+}
+
+impl RawNode for NodeItem {
+    fn inner(&self) -> NodeItem {
+        self.clone()
     }
 }
 
@@ -107,7 +114,7 @@ impl Node for NodeItem {
     }
 
     #[inline]
-    fn child_nodes(&self) -> &NodeList<NodeItem> {
+    fn child_nodes(&self) -> &NodeList<impl Node> {
         self.inner()
             .children()
             .unwrap_or(&EMPTY)
@@ -120,11 +127,11 @@ impl Node for NodeItem {
 
     #[inline]
     fn set_content<T:ToString>(&mut self, content:T) {
-        self.inner_mut().set_content(content.to_string());
+        self.inner_mut().set_content(&content.to_string());
     }
 
     #[inline]
-    fn parrent_node(&self) -> Option<NodeItem> {
+    fn parrent_node(&self) -> impl NodeRef {
         self.inner().parrent()
     }
 
@@ -137,47 +144,73 @@ impl Node for NodeItem {
     }
 
     fn append_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
-        where N: DerefMut<Target = NodeItem>
+        where N: Node
     {
-        self.inner_mut()
-            .append(node)?;
+        let mut node = node.inner();
 
-        node.deref_mut().inner_mut()
+        self.inner_mut()
+            .append(&node)?;
+
+        node.inner_mut()
             .set_parrent(self);
 
         Ok(())
     }
 
     fn prepend_node<N>(&mut self, node:&mut N) -> Result<(), NodeError> 
-        where N: DerefMut<Target = NodeItem>
+        where N: Node
     {
-        self.inner_mut()
-            .prepend(node)?;
+        let mut node = node.inner();
 
-        node.deref_mut().inner_mut()
+        self.inner_mut()
+            .prepend(&node)?;
+
+        node.inner_mut()
             .set_parrent(self);
 
         Ok(())
     }
 
     fn insert_before<N, R>(&mut self, new_node:&mut N, ref_node:&R) -> Result<(), NodeError>
-        where N: DerefMut<Target = NodeItem>,
-              R: Deref<Target = NodeItem>
+        where N: Node,
+              R: Node
     {
-        if self.inner_mut().insert(new_node, ref_node)? {
-            new_node.deref_mut().inner_mut()
+        let mut new_node = new_node.inner();
+        let ref_node = ref_node.inner();
+
+        if self.inner_mut().insert_before(&new_node, &ref_node)? {
+            new_node.inner_mut()
                 .set_parrent(self);
 
             Ok(())
         } else {
-            Err(NodeError::NotDesendent(self.clone(), (*ref_node).clone()))
+            Err(NodeError::NotDesendent(self.clone(), ref_node))
+        }
+    }
+
+    fn insert_after<N, R>(&mut self, new_node:&mut N, ref_node:&R) -> Result<(), NodeError>
+        where N: Node,
+              R: Node
+    {
+        let mut new_node = new_node.inner();
+        let ref_node = ref_node.inner();
+
+        if self.inner_mut().insert_after(&new_node, &ref_node)? {
+            new_node.inner_mut()
+                .set_parrent(self);
+
+            Ok(())
+        } else {
+            Err(NodeError::NotDesendent(self.clone(), ref_node))
         }
     }
 
     fn remove_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
-        where N: DerefMut<Target = NodeItem>
+        where N: Node
     {
-        if self.inner_mut().remove(node.inner()) {
+        let mut node = node.inner();
+
+        if self.inner_mut().remove(&node) {
             node.inner_mut().remove_parrent();
             Ok(())
         } else {
@@ -185,7 +218,19 @@ impl Node for NodeItem {
         }
     }
 
-    fn node(&self) -> NodeItem {
-        self.clone()
+    fn is_connected(&self) -> bool {
+        if let Some(parrent) = self.inner().parrent() {
+            parrent.is_connected()
+        } else {
+            false
+        }
+    }
+}
+
+impl Default for NodeItem {
+    fn default() -> Self {
+        Self(Rc::new(RefCell::new(
+            NodeInner::default()
+        )))
     }
 }
