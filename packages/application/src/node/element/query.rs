@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{Element, Attribute, Node};
+use super::{Element, Attribute};
 
 #[derive(Debug, Clone)]
 pub enum AttributeSelector<'a> {
@@ -50,7 +50,7 @@ impl<'a> AttributeSelector<'a> {
         }
     }
 
-    fn match_element(&self, elm:&Element) -> bool {
+    fn match_element(&self, elm:&impl Element) -> bool {
         elm.attributes()
             .find(|(name, att)|self.match_attribute(name, att))
             .is_some()
@@ -66,7 +66,7 @@ pub enum QueryToken<'a> {
 }
 
 impl<'a> QueryToken<'a> {
-    pub(crate) fn match_element(&self, elm:&Element) -> bool {
+    pub(crate) fn match_element(&self, elm:&impl Element) -> bool {
         match self {
             Self::TagName(name) => (&elm.tag_name()).eq(name),
             Self::Id(id) => elm.get_id().eq(id),
@@ -182,7 +182,7 @@ fn next<'a, 'b>(string:&'a str, start:&'b mut usize, idx:&'b mut usize, flags:&'
 pub trait Query {
     fn parse(&self) -> Result<Vec<QueryToken<'_>>, QueryError>;
 
-    fn match_element(&self, elm:&Element) -> Result<bool, QueryError> {
+    fn match_element(&self, elm:&impl Element) -> Result<bool, QueryError> {
         for token in &(self.parse()?) {
             if !token.match_element(elm) {
                 return Ok(false)

@@ -6,7 +6,7 @@ use std::{
 use super::*;
 
 #[derive(Clone)]
-pub struct NodeItem(Rc<RefCell<NodeInner>>);
+pub struct NodeItem(pub(crate) Rc<RefCell<NodeInner>>);
 
 impl fmt::Display for NodeItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -59,6 +59,7 @@ impl NodeItem {
         unsafe{ &mut *self.0.as_ptr() }
     }
 
+    #[inline]
     pub fn new_text<T:ToString>(text:&T) -> Self {
         Self(Rc::new(
             RefCell::new(
@@ -67,6 +68,7 @@ impl NodeItem {
         ))
     }
 
+    #[inline]
     pub fn new_element<T:ToString>(tag_name:T) -> Self {
         Self(Rc::new(
             RefCell::new(
@@ -75,10 +77,58 @@ impl NodeItem {
         ))
     }
 
+    #[inline]
+    pub(crate) fn new_root() -> Self {
+        Self(Rc::new(
+            RefCell::new(
+                NodeInner::new_empty_root()
+            )
+        ))
+    }
+
     pub(crate) fn as_ref(&self) -> NodeItemRef {
         NodeItemRef(
             Rc::downgrade(&self.0)
         )
+    }
+
+    pub(crate) fn children_map(&self, func: impl Fn(&NodeItem)->bool) -> NodeList<NodeItem> {
+        self.child_nodes()
+            .iter()
+            .filter_map(|n| if n.node_type() == NodeType::Element {
+                let elm = n.as_item();
+                if func(&elm) {
+                    Some(elm)
+                } else {
+                    None
+                }
+            } else {
+                None
+            })
+            .into()
+    }
+
+    pub(crate) fn children_inner(&self) -> NodeList<NodeItem> {
+        self.child_nodes()
+            .iter()
+            .filter_map(|n| (n.node_type() == NodeType::Element).then(||{
+                n.as_item()
+            }))
+            .into()
+    }
+
+    #[inline]
+    pub(crate) fn inner_att(&self) -> &AttributeMap {
+        self.inner()
+            .attributes()
+            .unwrap()
+    }
+
+    #[inline]
+    pub(crate) fn inner_att_mut(&mut self) -> &mut AttributeMap {
+        self.inner_mut()
+            .attributes_mut()
+            .unwrap()
     }
 }
 
@@ -97,7 +147,7 @@ impl NodeRef for NodeItemRef{
 }
 
 impl RawNode for NodeItem {
-    fn inner(&self) -> NodeItem {
+    fn as_item(&self) -> NodeItem {
         self.clone()
     }
 }
@@ -135,8 +185,8 @@ impl Node for NodeItem {
         self.inner().parrent()
     }
 
-    fn contains<T:PartialEq<NodeItem>>(&self, node:&T) -> bool {
-        if node.eq(self) {
+    fn contains(&self, node:&impl Node) -> bool {
+        if node.is_node(self) {
             return true;
         }
 
@@ -146,7 +196,7 @@ impl Node for NodeItem {
     fn append_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
         where N: Node
     {
-        let mut node = node.inner();
+        let mut node = node.as_item();
 
         self.inner_mut()
             .append(&node)?;
@@ -160,7 +210,7 @@ impl Node for NodeItem {
     fn prepend_node<N>(&mut self, node:&mut N) -> Result<(), NodeError> 
         where N: Node
     {
-        let mut node = node.inner();
+        let mut node = node.as_item();
 
         self.inner_mut()
             .prepend(&node)?;
@@ -175,8 +225,8 @@ impl Node for NodeItem {
         where N: Node,
               R: Node
     {
-        let mut new_node = new_node.inner();
-        let ref_node = ref_node.inner();
+        let mut new_node = new_node.as_item();
+        let ref_node = ref_node.as_item();
 
         if self.inner_mut().insert_before(&new_node, &ref_node)? {
             new_node.inner_mut()
@@ -192,8 +242,8 @@ impl Node for NodeItem {
         where N: Node,
               R: Node
     {
-        let mut new_node = new_node.inner();
-        let ref_node = ref_node.inner();
+        let mut new_node = new_node.as_item();
+        let ref_node = ref_node.as_item();
 
         if self.inner_mut().insert_after(&new_node, &ref_node)? {
             new_node.inner_mut()
@@ -208,9 +258,9 @@ impl Node for NodeItem {
     fn remove_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
         where N: Node
     {
-        let mut node = node.inner();
+        let mut node = node.as_item();
 
-        if self.inner_mut().remove(&node) {
+        if self.inner_mut().remove(&node.inner()) {
             node.inner_mut().remove_parrent();
             Ok(())
         } else {

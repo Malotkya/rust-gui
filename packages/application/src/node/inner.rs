@@ -45,6 +45,15 @@ impl PartialEq for NodeInnerType {
     }
 }
 
+impl<N: Node> PartialEq<N> for NodeInnerType {
+    fn eq(&self, other: &N) -> bool {
+        std::ptr::eq(
+            self as *const Self as *const u8,
+            other.as_ptr()
+        )
+    }
+}
+
 impl Eq for NodeInnerType {}
 
 #[derive(Clone)]
@@ -67,20 +76,34 @@ impl fmt::Debug for NodeInner {
 }
 
 impl NodeInner {
-    pub fn new_text(value:String) -> Self {
+    pub(crate) fn new_text(value:String) -> Self {
         Self {
             data: NodeInnerType::Text(value),
             parrent: None
         }
     }
 
-    pub fn new_element(tag_name:String) -> Self {
+    pub(crate) fn new_element(tag_name:String) -> Self {
         Self {
             data:NodeInnerType::Element {
                 tag_name,
                 attributes: AttributeMap::new(),
                 children: NodeList::new()
             },
+            parrent: None
+        }
+    }
+
+    pub(crate) fn new_empty_root() -> Self {
+        Self {
+            data: NodeInnerType::Root(NodeList::new()),
+            parrent: None
+        }
+    }
+
+    pub(crate) fn new_root(list:NodeList<NodeItem>) -> Self {
+        Self {
+            data: NodeInnerType::Root(list),
             parrent: None
         }
     }
@@ -132,12 +155,16 @@ impl NodeInner {
             .flatten()
     }
 
-    pub fn contains<N: PartialEq<NodeItem>>(&self, node:&N) -> bool {
-        if let NodeInnerType::Element{children, ..} = &self.data {
-            for child in children.iter() {
-                if node.eq(child) {
-                    return true;
-                }
+    pub fn contains(&self, node:&impl Node) -> bool {
+        let children = match &self.data {
+            NodeInnerType::Element{children, ..} => children,
+            NodeInnerType::Root(list) => list,
+            _ => {return false}
+        };
+
+        for child in children.iter() {
+            if child.contains(node) {
+                return true;
             }
         }
         
@@ -197,7 +224,7 @@ impl NodeInner {
         }
     }
 
-    pub fn remove<T:PartialEq<NodeItem>>(&mut self, node:&T) -> bool {
+    pub fn remove(&mut self, node:&NodeInner) -> bool {
         match &mut self.data {
             NodeInnerType::Text(_) => false,
             NodeInnerType::Element { children, .. } =>
@@ -229,6 +256,7 @@ impl NodeInner {
             }
         }
 
+        children.clear();
         children.insert_end(
             NodeItem::new_text(&value)
         )

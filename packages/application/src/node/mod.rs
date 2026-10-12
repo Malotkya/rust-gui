@@ -3,6 +3,8 @@ mod element;
 pub use element::*;
 mod document;
 pub use document::*;
+mod fragment;
+pub use fragment::*;
 mod inner;
 pub(crate) use inner::*;
 mod item;
@@ -49,17 +51,20 @@ pub enum NodeType {
 }
 
 pub trait RawNode {
-    fn inner(&self) -> NodeItem;
+    fn as_item(&self) -> NodeItem;
+    fn as_ptr(&self) -> *const u8 {
+        self as *const Self as *const u8
+    }
 }
 
 impl RawNode for String {
-    fn inner(&self) -> NodeItem {
+    fn as_item(&self) -> NodeItem {
         NodeItem::new_text(self)
     }
 }
 
 impl RawNode for &str {
-    fn inner(&self) -> NodeItem {
+    fn as_item(&self) -> NodeItem {
         NodeItem::new_text(self)
     }
 }
@@ -75,7 +80,7 @@ pub trait Node: RawNode {
     fn set_content<T:ToString>(&mut self, content:T);
 
     fn parrent_node(&self) -> impl NodeRef;
-    fn contains<T:PartialEq<NodeItem>>(&self, node:&T) -> bool;
+    fn contains(&self, node:&impl Node) -> bool;
 
     fn append_node<N>(&mut self, node:&mut N) -> Result<(), NodeError>
         where N: Node;
@@ -94,6 +99,12 @@ pub trait Node: RawNode {
 
     fn is_connected(&self) -> bool;
 
+    fn is_node<N:Node>(&self, other: &N) -> bool {
+        std::ptr::eq(
+            self.as_ptr(),
+            other.as_ptr()
+        )
+    }
 }
 
 pub trait NodeRef {
@@ -106,7 +117,7 @@ impl<T:RawNode> NodeRef for Option<T> {
 
     fn to_owned(&self) -> Option<Self::TargetNode> {
         self.as_ref()
-            .map(|n|n.inner())
+            .map(|n|n.as_item())
     }
 }
 
