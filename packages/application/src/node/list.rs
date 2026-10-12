@@ -142,6 +142,12 @@ impl<N:Node> NodeList<N> {
             .map(|n|n.get_content().trim().to_string())
             .collect::<Vec<_>>()
     }
+
+    pub(crate) fn clear(&mut self) {
+        if let Some(list) = &mut self.0 {
+            list.clear();
+        }
+    }
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
